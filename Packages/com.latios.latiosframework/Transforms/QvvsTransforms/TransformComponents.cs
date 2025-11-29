@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
+using Unity.Properties;
 
 namespace Latios.Transforms
 {
@@ -82,70 +83,6 @@ namespace Latios.Transforms
         [FieldOffset(32)] public float3 __stretch;
         [FieldOffset(28)] public int __worldIndex;
 #endif
-    }
-
-    /// <summary>
-    /// A cached copy of the parent's WorldTransform used internally by TransformAspect.
-    /// </summary>
-    public struct ParentToWorldTransform : IComponentData
-    {
-        public TransformQvvs parentToWorldTransform;
-
-        public float3 position => parentToWorldTransform.position;
-        public quaternion rotation => parentToWorldTransform.rotation;
-        public float scale => parentToWorldTransform.scale;
-        public float3 stretch => parentToWorldTransform.stretch;
-        public float3 nonUniformScale => scale * stretch;
-        public int worldIndex => parentToWorldTransform.worldIndex;
-    }
-
-    /// <summary>
-    /// A local space transform (excluding stretch) relative to the parent. It should only exist if the entity has a parent.
-    /// </summary>
-    public struct LocalTransform : IComponentData
-    {
-        /// <summary>
-        /// The actual TransformQvs of the local transform. Stretch is omitted here as it is owned by WorldTransform.
-        /// </summary>
-        public TransformQvs localTransform;
-
-        /// <summary>
-        /// The local-space position of the entity
-        /// </summary>
-        public float3 position => localTransform.position;
-        /// <summary>
-        /// The local-space rotation of the entity
-        /// </summary>
-        public quaternion rotation => localTransform.rotation;
-        /// <summary>
-        /// The local-space uniform scale of the entity prior to inherited scale values from ancestors
-        /// </summary>
-        public float scale => localTransform.scale;
-    }
-
-    /// <summary>
-    /// The desired Parent of the entity. Modify this to change the entity's parent.
-    /// </summary>
-    public struct Parent : IComponentData
-    {
-        public Entity parent;
-    }
-
-    /// <summary>
-    /// The actual parent of the entity as last seen by the Transform System. Do not modify.
-    /// </summary>
-    public struct PreviousParent : ICleanupComponentData
-    {
-        public Entity previousParent;
-    }
-
-    /// <summary>
-    /// The list of children of this entity as last seen by the Transform System. Do not modify.
-    /// </summary>
-    [InternalBufferCapacity(0)]
-    public struct Child : ICleanupBufferElementData
-    {
-        public EntityWith<Parent> child;
     }
 
     /// <summary>
@@ -238,24 +175,84 @@ namespace Latios.Transforms
         public Flags modeFlags;
     }
 
-    internal struct Depth : IComponentData
+    public struct RootReference : IComponentData
     {
-        public byte depth;
+        internal EntityWithBuffer<EntityInHierarchy> m_rootEntity;
+        internal int                                 m_indexInHierarchy;
+
+        [CreateProperty]
+        public Entity rootEntity => m_rootEntity;
+        [CreateProperty]
+        public int indexInHierarchy => m_indexInHierarchy;
     }
 
-    internal struct ChunkDepthMask : IComponentData
+    public enum InheritanceFlags : byte
     {
-        public BitField32 chunkDepthMask;
+        /// <summary>
+        /// If the enum is equal to this, then normal hierarchy update rules apply, and all values are affected by the parent.
+        /// </summary>
+        Normal = 0x0,
+        /// <summary>
+        /// When present, the world-space x-axis position is preserved. Otherwise, the value is affected by the parent.
+        /// </summary>
+        WorldX = 0x1,
+        /// <summary>
+        /// When present, the world-space y-axis position is preserved. Otherwise, the value is affected by the parent.
+        /// </summary>
+        WorldY = 0x2,
+        /// <summary>
+        /// When present, the world-space z-axis position is preserved. Otherwise, the value is affected by the parent.
+        /// </summary>
+        WorldZ = 0x4,
+        /// <summary>
+        /// When present, the world-space forward direction is preserved. Otherwise, the value is affected by the parent.
+        /// </summary>
+        WorldForward = 0x8,
+        /// <summary>
+        /// When present, the world-space up direction is preserved. Otherwise, the value is affected by the parent.
+        /// </summary>
+        WorldUp = 0x10,
+        /// <summary>
+        /// If only one of WorldForward or WorldUp is set, then if this flag is set, the up-direction is used and
+        /// the forward-direction is approximated as best as possible. Otherwise, the forward-direction is used and
+        /// the up-direction is approximated as best as possible.
+        /// </summary>
+        StrictUp = 0x20,
+        /// <summary>
+        /// When present, the world-space scale is preserved. Otherwise, the value is affected by the parent.
+        /// </summary>
+        WorldScale = 0x40,
+        /// <summary>
+        /// When present, the world-space position is preserved. Otherwise, the value is affected by the parent.
+        /// </summary>
+        WorldPosition = WorldX | WorldY | WorldZ,
+        /// <summary>
+        /// When present, the world-space orientation is preserved. Otherwise, the value is affected by the parent.
+        /// </summary>
+        WorldRotation = WorldForward | WorldUp,
+        /// <summary>
+        /// When present, the world-space transform is preserved and the local-space transform is updated.
+        /// </summary>
+        WorldAll = WorldPosition | WorldRotation | WorldScale,
     }
 
-    internal struct RuntimeFeatureFlags : IComponentData
+    public struct EntityInHierarchy : IBufferElementData
     {
-        public enum Flags : byte
-        {
-            None = 0,
-            ExtremeTransforms = 1
-        }
-        public Flags flags;
+        internal EntityWith<RootReference> m_descendantEntity;
+        internal int                       m_parentIndex;
+        internal int                       m_firstChildIndex;
+        internal int                       m_childCount;
+        internal InheritanceFlags          m_flags;
+
+        [CreateProperty] public Entity entity => m_descendantEntity;
+        [CreateProperty] public int parentIndex => m_parentIndex;
+        [CreateProperty] public int childCount => m_childCount;
+        [CreateProperty] public int firstChildIndex => m_firstChildIndex;
+    }
+
+    public struct EntityInHierarchyCleanup : IBufferElementData
+    {
+        public EntityInHierarchy entityInHierarchy;
     }
 }
 #endif
