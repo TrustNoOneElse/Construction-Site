@@ -25,7 +25,8 @@ namespace Latios.Transforms
             public static TransformQvs LocalTransformFrom(Entity entity,
                                                           in RootReference rootReference,
                                                           in WorldTransform worldTransform,
-                                                          ref BufferLookup<EntityInHierarchy> entityInHierarchyLookupRO,
+                                                          ref ComponentLookup<WorldTransform>        worldTransformLookupRO,
+                                                          ref BufferLookup<EntityInHierarchy>        entityInHierarchyLookupRO,
                                                           ref BufferLookup<EntityInHierarchyCleanup> entityInHierarchyCleanupLookupRO)
             {
                 DynamicBuffer<EntityInHierarchy> hierarchy;
@@ -60,9 +61,9 @@ namespace Latios.Transforms
         }
 
         public static TransformQvs LocalTransformFrom(Entity entity,
-                                                      ref ComponentLookup<RootReference> rootReferenceLookupRO,
-                                                      ref ComponentLookup<WorldTransform> worldTransformLookupRO,
-                                                      ref BufferLookup<EntityInHierarchy> entityInHierarchyLookupRO,
+                                                      ref ComponentLookup<RootReference>         rootReferenceLookupRO,
+                                                      ref ComponentLookup<WorldTransform>        worldTransformLookupRO,
+                                                      ref BufferLookup<EntityInHierarchy>        entityInHierarchyLookupRO,
                                                       ref BufferLookup<EntityInHierarchyCleanup> entityInHierarchyCleanupLookupRO)
         {
             var worldTransform = worldTransformLookupRO[entity];
@@ -83,3 +84,4 @@ namespace Latios.Transforms
         }
     }
 }
+

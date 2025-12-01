@@ -1,4 +1,4 @@
-#if !LATIOS_TRANSFORMS_UNCACHED_QVVS && !LATIOS_TRANSFORMS_UNITY
+#if !LATIOS_TRANSFORMS_UNITY
 using Latios.Authoring;
 using Unity.Collections;
 using Unity.Entities;
@@ -31,7 +31,6 @@ namespace Latios.Transforms.Authoring
             context.bakingSystemTypesToInject.Add(TypeManager.GetSystemTypeIndex<Systems.InheritanceFlagsBakingSystem>());
             context.bakingSystemTypesToInject.Add(TypeManager.GetSystemTypeIndex<Systems.ExtraTransformComponentsBakingSystem>());
             context.bakingSystemTypesToInject.Add(TypeManager.GetSystemTypeIndex<Systems.TransformBakingSystem>());
-            context.bakingSystemTypesToInject.Add(TypeManager.GetSystemTypeIndex<Systems.TransformHierarchySyncBakingSystem>());
         }
     }
 }

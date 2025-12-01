@@ -1,4 +1,4 @@
-#if !LATIOS_TRANSFORMS_UNCACHED_QVVS && !LATIOS_TRANSFORMS_UNITY
+#if !LATIOS_TRANSFORMS_UNITY
 using Latios.Systems;
 using Unity.Burst;
 using Unity.Collections;
@@ -137,19 +137,7 @@ namespace Latios.Transforms.Systems
         {
             EnableSystemSorting = false;
 
-            var flags = worldBlackboardEntity.GetComponentData<RuntimeFeatureFlags>();
-
             GetOrCreateAndAddManagedSystem<PreTransformSuperSystem>();
-            GetOrCreateAndAddUnmanagedSystem<ParentChangeSystem>();
-            if ((flags.flags & RuntimeFeatureFlags.Flags.ExtremeTransforms) != RuntimeFeatureFlags.Flags.None)
-            {
-                GetOrCreateAndAddUnmanagedSystem<ExtremeChildDepthsSystem>();
-                GetOrCreateAndAddUnmanagedSystem<ExtremeTransformHierarchyUpdateSystem>();
-            }
-            else
-            {
-                GetOrCreateAndAddUnmanagedSystem<TransformHierarchyUpdateSystem>();
-            }
             GetOrCreateAndAddManagedSystem<PostTransformSuperSystem>();
         }
     }

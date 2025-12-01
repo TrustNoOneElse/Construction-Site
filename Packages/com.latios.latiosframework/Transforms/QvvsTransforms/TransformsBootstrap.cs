@@ -1,4 +1,4 @@
-#if !LATIOS_TRANSFORMS_UNCACHED_QVVS && !LATIOS_TRANSFORMS_UNITY
+#if !LATIOS_TRANSFORMS_UNITY
 
 using Unity.Collections;
 using Unity.Entities;
@@ -17,11 +17,6 @@ namespace Latios.Transforms
             var companionTransformSystem = world.Unmanaged.GetExistingUnmanagedSystem<Unity.Entities.CompanionGameObjectUpdateTransformSystem>();
             if (world.Unmanaged.IsSystemValid(companionTransformSystem))
                 world.Unmanaged.ResolveSystemStateRef(companionTransformSystem).Enabled = false;
-
-            if (extreme)
-                world.worldBlackboardEntity.AddComponentData(new RuntimeFeatureFlags { flags = RuntimeFeatureFlags.Flags.ExtremeTransforms });
-            else
-                world.worldBlackboardEntity.AddComponent<RuntimeFeatureFlags>();
 
             BootstrapTools.InjectSystem(TypeManager.GetSystemTypeIndex<Systems.TransformSuperSystem>(),                 world, defaultComponentSystemGroup);
             BootstrapTools.InjectSystem(TypeManager.GetSystemTypeIndex<Systems.TransformInitializeSuperSystem>(),       world);
