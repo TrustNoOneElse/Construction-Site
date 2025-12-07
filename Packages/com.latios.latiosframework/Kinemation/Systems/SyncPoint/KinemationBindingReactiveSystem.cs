@@ -15,6 +15,8 @@ using Unity.Rendering;
 
 using static Unity.Entities.SystemAPI;
 
+// Todo: Is temporarily broken by QVVS. Code is commented so that things compile.
+
 namespace Latios.Kinemation.Systems
 {
     [RequireMatchingQueriesForUpdate]
@@ -52,7 +54,7 @@ namespace Latios.Kinemation.Systems
 
         LatiosWorldUnmanaged latiosWorld;
 
-        ParentReadWriteAspect.Lookup m_parentLookup;
+        //ParentReadWriteAspect.Lookup m_parentLookup;
 
 #if LATIOS_TRANSFORMS_UNITY
         // Dummy for Unity Transforms
@@ -65,7 +67,7 @@ namespace Latios.Kinemation.Systems
         {
             latiosWorld = state.GetLatiosWorldUnmanaged();
 
-            m_parentLookup = new ParentReadWriteAspect.Lookup(ref state);
+            //m_parentLookup = new ParentReadWriteAspect.Lookup(ref state);
 
             m_newMeshesQuery                    = state.Fluent().With<MaterialMeshInfo>(true).Without<ChunkPerFrameCullingMask>(true).Build();
             m_deadMeshesQuery                   = state.Fluent().With<ChunkPerFrameCullingMask>(false, true).Without<MaterialMeshInfo>().Build();
@@ -363,9 +365,9 @@ namespace Latios.Kinemation.Systems
                 // If Socket somehow gets added by accident, we might as well remove it.
                 // Also, we remove the LocalTransform and ParentToWorldTransform now to possibly prevent a structural change later.
 #if !LATIOS_TRANSFORMS_UNITY
-                state.EntityManager.RemoveComponent(m_newSkinnedMeshesQuery, new ComponentTypeSet(ComponentType.ReadWrite<Socket>(),
-                                                                                                  ComponentType.ReadWrite<LocalTransform>(),
-                                                                                                  ComponentType.ReadWrite<ParentToWorldTransform>()));
+                //state.EntityManager.RemoveComponent(m_newSkinnedMeshesQuery, new ComponentTypeSet(ComponentType.ReadWrite<Socket>(),
+                //                                                                                  ComponentType.ReadWrite<LocalTransform>(),
+                //                                                                                  ComponentType.ReadWrite<ParentToWorldTransform>()));
 #elif LATIOS_TRANSFORMS_UNITY
                 state.EntityManager.RemoveComponent<Socket>(m_newSkinnedMeshesQuery);
 #endif
@@ -373,7 +375,7 @@ namespace Latios.Kinemation.Systems
                 skinnedMeshAddTypes.Add(ComponentType.ReadWrite<BoundMesh>());
                 skinnedMeshAddTypes.Add(ComponentType.ReadWrite<SkeletonDependent>());
                 skinnedMeshAddTypes.Add(ComponentType.ReadOnly<CopyParentWorldTransformTag>());
-                skinnedMeshAddTypes.Add(ParentReadWriteAspect.componentType);
+                //skinnedMeshAddTypes.Add(ParentReadWriteAspect.componentType);
                 skinnedMeshAddTypes.Add(ComponentType.ChunkComponent<ChunkDeformPrefixSums>());
 
                 state.EntityManager.AddComponent(m_newSkinnedMeshesQuery, new ComponentTypeSet(in skinnedMeshAddTypes));
@@ -437,13 +439,13 @@ namespace Latios.Kinemation.Systems
                     stateLookup = GetComponentLookup<BoundMesh>(false)
                 }.Schedule(meshBindingStatesToWrite, 16, state.Dependency);
 
-                m_parentLookup.Update(ref state);
+                //m_parentLookup.Update(ref state);
                 state.Dependency = new ProcessSkinnedMeshStateOpsJob
                 {
                     failedBindingEntity = m_failedSkeletonMeshBindingEntity,
                     ops                 = skinnedMeshBindingsStatesToWrite.AsDeferredJobArray(),
-                    parentLookup        = m_parentLookup,
-                    stateLookup         = GetComponentLookup<SkeletonDependent>(false),
+                    //parentLookup        = m_parentLookup,
+                    stateLookup = GetComponentLookup<SkeletonDependent>(false),
 #if LATIOS_TRANSFORMS_UNITY
                     localTransformLookup = GetComponentLookup<Unity.Transforms.LocalTransform>(false)
 #endif
@@ -1640,9 +1642,9 @@ namespace Latios.Kinemation.Systems
         struct ProcessSkinnedMeshStateOpsJob : IJobParallelForDefer
         {
             [NativeDisableParallelForRestriction] public ComponentLookup<SkeletonDependent> stateLookup;
-            [NativeDisableParallelForRestriction] public ParentReadWriteAspect.Lookup       parentLookup;
-            [ReadOnly] public NativeArray<SkinnedMeshWriteStateOperation>                   ops;
-            public Entity                                                                   failedBindingEntity;
+            //[NativeDisableParallelForRestriction] public ParentReadWriteAspect.Lookup       parentLookup;
+            [ReadOnly] public NativeArray<SkinnedMeshWriteStateOperation> ops;
+            public Entity                                                 failedBindingEntity;
 
 #if LATIOS_TRANSFORMS_UNITY
             [NativeDisableParallelForRestriction] public ComponentLookup<Unity.Transforms.LocalTransform> localTransformLookup;
@@ -1651,11 +1653,11 @@ namespace Latios.Kinemation.Systems
             {
                 var op                     = ops[index];
                 stateLookup[op.meshEntity] = op.skinnedState;
-                var parentAspect           = parentLookup[op.meshEntity];
-                if (op.skinnedState.root == Entity.Null)
-                    parentAspect.parent = failedBindingEntity;
-                else
-                    parentAspect.parent = op.skinnedState.root;
+                //var parentAspect           = parentLookup[op.meshEntity];
+                //if (op.skinnedState.root == Entity.Null)
+                //    parentAspect.parent = failedBindingEntity;
+                //else
+                //    parentAspect.parent = op.skinnedState.root;
 
 #if LATIOS_TRANSFORMS_UNITY
                 localTransformLookup[op.meshEntity] = Unity.Transforms.LocalTransform.Identity;

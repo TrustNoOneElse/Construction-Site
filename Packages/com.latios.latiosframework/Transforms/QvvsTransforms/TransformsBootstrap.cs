@@ -18,6 +18,7 @@ namespace Latios.Transforms
             if (world.Unmanaged.IsSystemValid(companionTransformSystem))
                 world.Unmanaged.ResolveSystemStateRef(companionTransformSystem).Enabled = false;
 
+            BootstrapTools.InjectSystem(TypeManager.GetSystemTypeIndex<Systems.HierarchyCleanupSystem>(),                  world);
             BootstrapTools.InjectSystem(TypeManager.GetSystemTypeIndex<Systems.MotionHistoryInitializeSuperSystem>(),      world);
             BootstrapTools.InjectSystem(TypeManager.GetSystemTypeIndex<Systems.MotionHistoryUpdateSuperSystem>(),          world);
             BootstrapTools.InjectSystem(TypeManager.GetSystemTypeIndex<Systems.ExportToGameObjectTransformsSuperSystem>(), world);
