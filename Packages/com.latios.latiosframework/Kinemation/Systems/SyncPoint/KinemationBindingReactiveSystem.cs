@@ -14,8 +14,6 @@ using Unity.Rendering;
 
 using static Unity.Entities.SystemAPI;
 
-// Todo: Is temporarily broken by QVVS. Code is commented so that things compile.
-
 namespace Latios.Kinemation.Systems
 {
     [RequireMatchingQueriesForUpdate]
@@ -435,7 +433,23 @@ namespace Latios.Kinemation.Systems
                 }.Schedule(skinnedMeshBindingsStatesToWrite, 16, state.Dependency);
 #else
                 meshBindingsJH.Complete();
-                // Todo: Set parent.
+                foreach (var op in skinnedMeshBindingsStatesToWrite)
+                {
+                    state.EntityManager.SetComponentData(op.meshEntity, op.skinnedState);
+                    if (op.skinnedState.root == Entity.Null)
+                        state.EntityManager.AddChild(m_failedSkeletonMeshBindingEntity, op.meshEntity, InheritanceFlags.CopyParent);
+                    else
+                    {
+                        bool reparent = true;
+                        if (state.EntityManager.HasComponent<RootReference>(op.meshEntity))
+                        {
+                            var rootRef = state.EntityManager.GetComponentData<RootReference>(op.meshEntity);
+                            reparent    = rootRef.ToHandle(state.EntityManager).bloodParent.entity != op.skinnedState.root;
+                        }
+                        if (reparent)
+                            state.EntityManager.AddChild(op.skinnedState.root, op.meshEntity, InheritanceFlags.CopyParent);
+                    }
+                }
 #endif
 
                 state.Dependency = new ProcessMeshStateOpsJob
