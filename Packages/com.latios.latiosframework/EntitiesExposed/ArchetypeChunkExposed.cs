@@ -84,6 +84,7 @@ namespace Unity.Entities.Exposed
             return query._GetImpl()->_QueryData->HasEnableableComponents != 0;
         }
 
+        // The following do not check safety. Always check some safety handle such as EntityStorageInfoLookup.Exists() before use.
         public static unsafe ulong GetBloomMask(in this EntityArchetype archetype) => archetype.Archetype->BloomFilterMask;
         public static unsafe bool HasChunkHeader(in this EntityArchetype archetype) => archetype.Archetype->HasChunkHeader;
         public static unsafe bool HasSystemInstanceComponents(in this EntityArchetype archetype) => archetype.Archetype->HasSystemInstanceComponents;

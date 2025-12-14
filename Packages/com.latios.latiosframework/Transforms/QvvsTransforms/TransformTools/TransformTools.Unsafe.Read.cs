@@ -34,18 +34,20 @@ namespace Latios.Transforms
             /// </summary>
             /// <param name="rootReference">The RootReference obtained from chunk iteration</param>
             /// <param name="worldTransform">The WorldTransform of the entity possessing the RootReference, obtained from chunk iteration</param>
+            /// <param name="entityStorageInfoLookup">An EntityStorageInfoLookup from the same world the hierarchy belongs to</param>
             /// <param name="worldTransformLookupRO">A readonly ComponentLookup to the WorldTransform component</param>
             /// <param name="entityInHierarchyLookupRO">A readonly BufferLookup to the EntityInHierarchy dynamic buffer</param>
             /// <param name="entityInHierarchyCleanupLookupRO">A readonly BufferLookup to the EntityInHierarchyCleanup dynamic buffer</param>
             /// <returns>The local position, rotation, and uniform scale of the entity</returns>
             public static TransformQvs LocalTransformFrom(in RootReference rootReference,
                                                           in WorldTransform worldTransform,
+                                                          EntityStorageInfoLookup entityStorageInfoLookup,
                                                           ref ComponentLookup<WorldTransform>        worldTransformLookupRO,
                                                           ref BufferLookup<EntityInHierarchy>        entityInHierarchyLookupRO,
                                                           ref BufferLookup<EntityInHierarchyCleanup> entityInHierarchyCleanupLookupRO)
             {
                 var handle       = rootReference.ToHandle(ref entityInHierarchyLookupRO, ref entityInHierarchyCleanupLookupRO);
-                var parentHandle = handle.FindParent(ref worldTransformLookupRO, ref entityInHierarchyLookupRO);
+                var parentHandle = handle.FindParent(entityStorageInfoLookup);
                 if (!parentHandle.isNull)
                 {
                     var parentTransform = worldTransformLookupRO[parentHandle.entity];
