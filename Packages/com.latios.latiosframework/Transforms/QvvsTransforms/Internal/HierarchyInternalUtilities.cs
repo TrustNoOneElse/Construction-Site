@@ -19,7 +19,7 @@ namespace Latios.Transforms
                 localTransform = qvvs.inversemul(in parentTransform, in worldTransform);
                 return;
             }
-            if ((flags & InheritanceFlags.CopyParent) == InheritanceFlags.CopyParent)
+            if (flags.HasCopyParent())
             {
                 worldTransform = parentTransform;
                 localTransform = TransformQvs.identity;

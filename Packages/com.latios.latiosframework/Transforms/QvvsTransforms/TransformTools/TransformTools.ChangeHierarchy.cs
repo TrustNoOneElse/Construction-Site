@@ -13,7 +13,8 @@ namespace Latios.Transforms
     {
         #region API
         /// <summary>
-        /// Assigns a new parent to the entity, updating all hierarchy information between the two entities involved
+        /// Assigns a new parent to the entity, updating all hierarchy information between the two entities involved.
+        /// If either entity is missing WorldTransform, a WorldTransform component will be added.
         /// </summary>
         /// <param name="parent">The target parent</param>
         /// <param name="child">The entity which should have its parent assigned</param>
@@ -68,9 +69,21 @@ namespace Latios.Transforms
                     AddInternalChildToInernalParentSeparateRoot(em, parent, child, inheritanceFlags, transferLinkedEntityGroup);
             }
 
-            if ((inheritanceFlags & InheritanceFlags.CopyParent) == InheritanceFlags.CopyParent)
+            if (inheritanceFlags.HasCopyParent())
             {
-                // Todo: Set WorldTransform of child and propagate.
+                // Set WorldTransform of child and propagate.
+                var                          rootReference = em.GetComponentData<RootReference>(child);
+                Span<Propagate.WriteCommand> command       = stackalloc Propagate.WriteCommand[1];
+                command[0]                                 = new Propagate.WriteCommand
+                {
+                    indexInHierarchy = rootReference.indexInHierarchy,
+                    writeType        = Propagate.WriteCommand.WriteType.CopyParentParentChanged
+                };
+                Span<TransformQvvs> dummy  = stackalloc TransformQvvs[1];
+                var                 handle = rootReference.ToHandle(em);
+                em.CompleteDependencyBeforeRW<WorldTransform>();
+                var transformLookup = em.GetComponentLookup<WorldTransform>(false);
+                Propagate.WriteAndPropagate(handle.m_hierarchy, dummy, command, ref transformLookup, em.GetEntityStorageInfoLookup());
             }
         }
         #endregion
@@ -578,7 +591,7 @@ namespace Latios.Transforms
             em.AddComponent(child, addToChild);
             if (!childHadLtw)
                 em.SetComponentData(child, new WorldTransform { worldTransform = TransformQvvs.identity });
-            if ((flags & InheritanceFlags.CopyParent) == InheritanceFlags.CopyParent)
+            if (flags.HasCopyParent())
                 em.SetComponentData(child, em.GetComponentData<WorldTransform>(parent));
             else if (!childHadLtw)
             {
@@ -730,7 +743,7 @@ namespace Latios.Transforms
             {
                 var temp = hierarchyArray[i];
                 temp.m_firstChildIndex--;
-                if (i >= indexToRemove && em.HasComponent<RootReference>(temp.entity))
+                if (i >= indexToRemove && em.IsAlive(temp.entity))
                     em.SetComponentData(temp.entity, new RootReference { m_indexInHierarchy = i, m_rootEntity = root });
                 hierarchyArray[i]                                                                             = temp;
             }
@@ -935,16 +948,16 @@ namespace Latios.Transforms
                 throw new ArgumentException("Cannot make an entity a child of itself");
             if (!em.Exists(parent))
                 throw new ArgumentException("The parent does not exist");
-            if (em.GetChunk(parent).Archetype.IsCleanup())
+            if (em.IsAlive(parent))
                 throw new ArgumentException("The parent has been destroyed");
             if (!em.Exists(child))
                 throw new ArgumentException("The child does not exist");
-            if (em.GetChunk(child).Archetype.IsCleanup())
+            if (em.IsAlive(child))
                 throw new ArgumentException("The child has been destroyed");
             if (transferLEG && em.HasComponent<RootReference>(parent))
             {
                 var rootRef = em.GetComponentData<RootReference>(parent);
-                if (em.GetChunk(rootRef.rootEntity).Archetype.IsCleanup())
+                if (em.IsAlive(rootRef.rootEntity))
                     throw new InvalidOperationException(
                         $"Cannot transfer LinkedEntityGroup to a new hierarchy whose root has been destroyed. Root: {rootRef.rootEntity.ToFixedString()}");
             }

@@ -204,6 +204,11 @@ namespace Latios.Transforms
     {
         public EntityInHierarchy entityInHierarchy;
     }
+
+    public static class InheritanceFlagsExtensions
+    {
+        public static bool HasCopyParent(this InheritanceFlags flags) => (flags & InheritanceFlags.CopyParent) == InheritanceFlags.CopyParent;
+    }
 }
 #endif
 

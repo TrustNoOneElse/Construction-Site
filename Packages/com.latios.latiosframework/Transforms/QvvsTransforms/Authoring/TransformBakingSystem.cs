@@ -601,7 +601,7 @@ namespace Latios.Transforms.Authoring.Systems
                 while (queue.TryDequeue(out var current))
                 {
                     inheritanceFlagsLookup.TryGetComponent(current.child, out var flags);
-                    if ((flags.flags & InheritanceFlags.CopyParent) == InheritanceFlags.CopyParent)
+                    if (flags.flags.HasCopyParent())
                         computedTransforms.Add(computedTransforms[current.parentIndex]);
                     else
                         computedTransforms.Add(ComputeWorldTransform(current.child, buffer[current.parentIndex].entity, computedTransforms[current.parentIndex]));

@@ -15,16 +15,21 @@ namespace Latios.Transforms
             /// <param name="rootReference">The RootReference obtained from chunk iteration</param>
             /// <param name="worldTransform">The WorldTransform of the entity possessing the RootReference, obtained from chunk iteration</param>
             /// <param name="entityManager">The EntityManager which manages the entity</param>
+            /// <param name="parentTransform">The parent's world-space transform for convenience, identity if there was no parent</param>
             /// <returns>The local position, rotation, and uniform scale of the entity</returns>
-            public static TransformQvs LocalTransformFrom(in RootReference rootReference, in WorldTransform worldTransform, EntityManager entityManager)
+            public static TransformQvs LocalTransformFrom(in RootReference rootReference,
+                                                          in WorldTransform worldTransform,
+                                                          EntityManager entityManager,
+                                                          out TransformQvvs parentTransform)
             {
                 var handle       = rootReference.ToHandle(entityManager);
                 var parentHandle = handle.FindParent(entityManager);
                 if (!parentHandle.isNull)
                 {
-                    var parentTransform = entityManager.GetComponentData<WorldTransform>(parentHandle.entity);
-                    return qvvs.inversemul(in parentTransform.worldTransform, in worldTransform.worldTransform);
+                    parentTransform = entityManager.GetComponentData<WorldTransform>(parentHandle.entity).worldTransform;
+                    return qvvs.inversemul(in parentTransform, in worldTransform.worldTransform);
                 }
+                parentTransform = TransformQvvs.identity;
                 return new TransformQvs(worldTransform.position, worldTransform.rotation, worldTransform.scale);
             }
 
@@ -38,21 +43,24 @@ namespace Latios.Transforms
             /// <param name="worldTransformLookupRO">A readonly ComponentLookup to the WorldTransform component</param>
             /// <param name="entityInHierarchyLookupRO">A readonly BufferLookup to the EntityInHierarchy dynamic buffer</param>
             /// <param name="entityInHierarchyCleanupLookupRO">A readonly BufferLookup to the EntityInHierarchyCleanup dynamic buffer</param>
+            /// <param name="parentTransform">The parent's world-space transform for convenience, identity if there was no parent</param>
             /// <returns>The local position, rotation, and uniform scale of the entity</returns>
             public static TransformQvs LocalTransformFrom(in RootReference rootReference,
                                                           in WorldTransform worldTransform,
                                                           EntityStorageInfoLookup entityStorageInfoLookup,
                                                           ref ComponentLookup<WorldTransform>        worldTransformLookupRO,
                                                           ref BufferLookup<EntityInHierarchy>        entityInHierarchyLookupRO,
-                                                          ref BufferLookup<EntityInHierarchyCleanup> entityInHierarchyCleanupLookupRO)
+                                                          ref BufferLookup<EntityInHierarchyCleanup> entityInHierarchyCleanupLookupRO,
+                                                          out TransformQvvs parentTransform)
             {
                 var handle       = rootReference.ToHandle(ref entityInHierarchyLookupRO, ref entityInHierarchyCleanupLookupRO);
                 var parentHandle = handle.FindParent(entityStorageInfoLookup);
                 if (!parentHandle.isNull)
                 {
-                    var parentTransform = worldTransformLookupRO[parentHandle.entity];
-                    return qvvs.inversemul(in parentTransform.worldTransform, in worldTransform.worldTransform);
+                    parentTransform = worldTransformLookupRO[parentHandle.entity].worldTransform;
+                    return qvvs.inversemul(in parentTransform, in worldTransform.worldTransform);
                 }
+                parentTransform = TransformQvvs.identity;
                 return new TransformQvs(worldTransform.position, worldTransform.rotation, worldTransform.scale);
             }
         }
