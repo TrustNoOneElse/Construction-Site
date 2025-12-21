@@ -9,7 +9,6 @@ using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
 using Unity.Entities.Exposed;
 using Unity.Entities.Graphics;
-using Unity.Entities.UniversalDelegates;
 using Unity.Jobs;
 using Unity.Mathematics;
 using Unity.Profiling;
@@ -886,9 +885,7 @@ namespace Latios.Kinemation.Systems
 
                 int numSortingPositionFloats              = sortingPositionPrefixSum * 3;
                 output->instanceSortingPositionFloatCount = numSortingPositionFloats;
-                output->instanceSortingPositions          = (sortingPositionPrefixSum == 0) ?
-                                                            null :
-                                                            ChunkDrawCommandOutput.Malloc<float>(numSortingPositionFloats);
+                output->instanceSortingPositions          = ChunkDrawCommandOutput.Malloc<float>(numSortingPositionFloats);
             }
         }
 
@@ -921,9 +918,13 @@ namespace Latios.Kinemation.Systems
                 // Draw command count is exact at this point, we can set it up front
                 int drawCommandCount = drawCommandPrefixSum;
 
-                output->drawCommandCount              = drawCommandCount;
-                output->drawCommands                  = ChunkDrawCommandOutput.Malloc<BatchDrawCommand>(drawCommandCount);
+                output->drawCommandCount = drawCommandCount;
+                output->drawCommands     = ChunkDrawCommandOutput.Malloc<BatchDrawCommand>(drawCommandCount);
+#if UNITY_6000_3_OR_NEWER
+                output->drawCommandPickingEntityIds = null;
+#else
                 output->drawCommandPickingInstanceIDs = null;
+#endif
 
                 // Worst case is one range per draw command, so this is an upper bound estimate.
                 // The real count could be less.

@@ -405,6 +405,9 @@ namespace Latios.Transforms
                     return new OldNewWorldTransform { oldTransform = t, newTransform = t };
                 }
 
+                // Todo: If flags is not default, check change between old and new transforms of parent, because we might
+                // still be able to early out.
+
                 ref var worldTransform         = ref transformLookup.GetRefRW(entity).ValueRW.worldTransform;
                 var     originalWorldTransform = worldTransform;
                 var     parentTransform        = oldNewWorldTransform.newTransform;
