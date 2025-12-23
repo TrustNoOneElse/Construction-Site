@@ -6,6 +6,7 @@ using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
 using Unity.Entities.Exposed;
 using Unity.Mathematics;
+using Unity.Transforms;
 
 namespace Latios.Transforms
 {
@@ -14,14 +15,16 @@ namespace Latios.Transforms
         #region API
         /// <summary>
         /// Assigns a new parent to the entity, updating all hierarchy information between the two entities involved.
-        /// If either entity is missing WorldTransform, a WorldTransform component will be added.
+        /// If the child entity is missing its WorldTransform (or TickedWorldTransform if it has TickedEntityTag),
+        /// then that component will be added. The parent and all ancestry will have WorldTransform and/or
+        /// TickedWorldTransform added to match what is present on the child.
         /// </summary>
         /// <param name="parent">The target parent</param>
         /// <param name="child">The entity which should have its parent assigned</param>
         /// <param name="inheritanceFlags">The inheritance flags the child will use</param>
         /// <param name="transferLinkedEntityGroup">If the child entity is a standalone entity or is a hierarchy root,
         /// then its entire LinkedEntityGroup (or itself if it doesn't have one) will be appended to the destination
-        /// hierarchy root. If the entity is already a child of a different hierarchy, than only entities within its
+        /// hierarchy root. If the entity is already a child of a different hierarchy, then only entities within its
         /// subtree which are in its original hierarchy's LinkedEntityGroup will be transferred. If the child already
         /// belonged to the destination hierarchy, the LinkedEntityGroup buffer will not be touched.</param>
         public static unsafe void AddChild(this EntityManager em,
@@ -66,7 +69,7 @@ namespace Latios.Transforms
                 if (childRootRef.rootEntity == parentRootRef.rootEntity)
                     AddInternalChildToInternalParentSameRoot(em, parent, child, inheritanceFlags);
                 else
-                    AddInternalChildToInernalParentSeparateRoot(em, parent, child, inheritanceFlags, transferLinkedEntityGroup);
+                    AddInternalChildToInternalParentSeparateRoot(em, parent, child, inheritanceFlags, transferLinkedEntityGroup);
             }
 
             if (inheritanceFlags.HasCopyParent())
@@ -83,7 +86,16 @@ namespace Latios.Transforms
                 var                 handle = rootReference.ToHandle(em);
                 em.CompleteDependencyBeforeRW<WorldTransform>();
                 var transformLookup = em.GetComponentLookup<WorldTransform>(false);
-                Propagate.WriteAndPropagate(handle.m_hierarchy, dummy, command, ref transformLookup, em.GetEntityStorageInfoLookup());
+                if (em.HasComponent<WorldTransform>(child))
+                {
+                    var ema = new EntityManagerAccess(em);
+                    Propagate.WriteAndPropagate(handle.m_hierarchy, dummy, command, ref ema, ref ema);
+                }
+                if (em.HasComponent<TickedWorldTransform>(child))
+                {
+                    var ema = new TickedEntityManagerAccess(em);
+                    Propagate.WriteAndPropagate(handle.m_hierarchy, dummy, command, ref ema, ref ema);
+                }
             }
         }
         #endregion
@@ -91,8 +103,12 @@ namespace Latios.Transforms
         #region Processes
         static unsafe void AddSoloChildToSoloParent(EntityManager em, Entity parent, Entity child, InheritanceFlags flags, bool createOrAppendLEG)
         {
-            ConvertSoloArchetypeToRootArchetype(em, parent, createOrAppendLEG, false);
-            ConvertSoloArchetypeToChildArchetype(em, parent, child, flags);
+            bool addTickedToChild  = em.HasComponent<TickedEntityTag>(child);
+            bool addNormalToChild  = !addTickedToChild || em.HasComponent<WorldTransform>(child);
+            bool addTickedToParent = addTickedToChild || em.HasComponent<TickedEntityTag>(parent);
+            bool addNormalToParent = addNormalToChild || em.HasComponent<WorldTransform>(parent);
+            AddRootComponents(em, parent, createOrAppendLEG, false, addNormalToParent, addTickedToParent);
+            AddChildComponents(em, parent, child, addNormalToChild, addTickedToChild);
 
             em.SetComponentData(child, new RootReference { m_rootEntity = parent, m_indexInHierarchy = 1 });
             var hierarchy                                                                            = em.GetBuffer<EntityInHierarchy>(parent);
@@ -114,64 +130,55 @@ namespace Latios.Transforms
             });
 
             if (createOrAppendLEG)
-                em.GetBuffer<LinkedEntityGroup>(parent).Add(new LinkedEntityGroup { Value = child });
-            else
-            {
-                var cleanup = em.GetBuffer<EntityInHierarchyCleanup>(parent).Reinterpret<EntityInHierarchy>();
-                cleanup.AddRange(hierarchy.AsNativeArray());
-            }
+                TransferFullLEG(em, parent, child);
+            UpdateCleanup(em, parent);
         }
 
         static unsafe void AddSoloChildToRootParent(EntityManager em, Entity parent, Entity child, InheritanceFlags flags, bool createOrAppendLEG)
         {
-            ConvertSoloArchetypeToChildArchetype(em, parent, child, flags);
+            bool addTickedToChild                                                    = em.HasComponent<TickedEntityTag>(child);
+            bool addNormalToChild                                                    = !addTickedToChild || em.HasComponent<WorldTransform>(child);
+            bool addTickedToParent                                                   = addTickedToChild || em.HasComponent<TickedEntityTag>(parent);
+            bool addNormalToParent                                                   = addNormalToChild || em.HasComponent<WorldTransform>(parent);
+            AssureAncestryHasComponents(em, parent, new RootReference { m_rootEntity = parent, m_indexInHierarchy = 0 }, addNormalToParent, addTickedToParent);
+            AddChildComponents(em, parent, child, addNormalToChild, addTickedToChild);
 
             var hierarchy = em.GetBuffer<EntityInHierarchy>(parent);
             AddSingleChild(em, hierarchy, 0, child, flags);
 
             if (createOrAppendLEG)
-            {
-                var dstLeg = GetOrCreateLEG(em, parent);
-                if (em.HasBuffer<LinkedEntityGroup>(child))
-                {
-                    var srcLeg = em.GetBuffer<LinkedEntityGroup>(child).Reinterpret<Entity>();
-                    // Ugly copy because Unity safety flags this
-                    for (int i = 0; i < srcLeg.Length; i++)
-                        dstLeg.Add(srcLeg[i]);
-                }
-                else
-                    dstLeg.Add(child);
-            }
-            else
-            {
-                GetOrAddAndCopyCleanup(em, parent);
-            }
+                TransferFullLEG(em, parent, child);
+            UpdateCleanup(em, parent);
         }
 
         static unsafe void AddSoloChildToInternalParent(EntityManager em, Entity parent, Entity child, InheritanceFlags flags, bool createOrAppendLEG)
         {
-            ConvertSoloArchetypeToChildArchetype(em, parent, child, flags);
+            bool addTickedToChild  = em.HasComponent<TickedEntityTag>(child);
+            bool addNormalToChild  = !addTickedToChild || em.HasComponent<WorldTransform>(child);
+            bool addTickedToParent = addTickedToChild || em.HasComponent<TickedEntityTag>(parent);
+            bool addNormalToParent = addNormalToChild || em.HasComponent<WorldTransform>(parent);
+            AddChildComponents(em, parent, child, addNormalToChild, addTickedToChild);
 
-            var rootRef   = em.GetComponentData<RootReference>(parent);
+            var rootRef = em.GetComponentData<RootReference>(parent);
+            AssureAncestryHasComponents(em, parent, rootRef, addNormalToParent, addTickedToParent);
+
             var hierarchy = GetHierarchy(em, rootRef.rootEntity, out var rootIsAlive);
             AddSingleChild(em, hierarchy, rootRef.indexInHierarchy, child, flags);
 
             if (createOrAppendLEG)
-            {
-                var dstLeg = GetOrCreateLEG(em, rootRef.rootEntity);
-                AppendChildRootLEG(em, dstLeg, child);
-            }
-            else if (rootIsAlive)
-            {
-                GetOrAddAndCopyCleanup(em, rootRef.rootEntity);
-            }
+                TransferFullLEG(em, rootRef.rootEntity, child);
+            UpdateCleanup(em, rootRef.rootEntity);
         }
 
         static unsafe void AddRootChildToSoloParent(EntityManager em, Entity parent, Entity child, InheritanceFlags flags, bool createOrAppendLEG)
         {
-            bool childHasCleanup = em.HasBuffer<EntityInHierarchyCleanup>(child);
-            ConvertSoloArchetypeToRootArchetype(em, parent, createOrAppendLEG, childHasCleanup);
-            em.AddComponent<RootReference>(child);
+            bool addTickedToChild  = em.HasComponent<TickedEntityTag>(child);
+            bool addNormalToChild  = !addTickedToChild || em.HasComponent<WorldTransform>(child);
+            bool addTickedToParent = addTickedToChild || em.HasComponent<TickedEntityTag>(parent);
+            bool addNormalToParent = addNormalToChild || em.HasComponent<WorldTransform>(parent);
+            bool childHasCleanup   = em.HasBuffer<EntityInHierarchyCleanup>(child);
+            AddRootComponents(em, parent, createOrAppendLEG, childHasCleanup, addNormalToParent, addTickedToParent);
+            AddChildComponents(em, parent, child, addNormalToChild, addTickedToChild);
 
             var dstHierarchy = em.GetBuffer<EntityInHierarchy>(parent);
             var srcHierarchy = em.GetBuffer<EntityInHierarchy>(child);
@@ -191,78 +198,65 @@ namespace Latios.Transforms
                 var temp = src[i];
                 temp.m_parentIndex++;
                 temp.m_firstChildIndex++;
-                em.SetComponentData(temp.entity, new RootReference { m_indexInHierarchy = i + 1, m_rootEntity = parent});
+                em.SetComponentData(temp.entity, new RootReference { m_indexInHierarchy = i + 1, m_rootEntity = parent });
                 dst[i + 1]                                                                                    = temp;
             }
 
-            if (childHasCleanup || !createOrAppendLEG)
-                GetOrAddAndCopyCleanup(em, parent);
             if (createOrAppendLEG)
-            {
-                var dstLeg = GetOrCreateLEG(em, parent);
-                AppendChildRootLEG(em, dstLeg, child);
-                em.RemoveComponent(child, new TypePack<EntityInHierarchy, EntityInHierarchyCleanup, LinkedEntityGroup>());
-            }
-            else
-            {
-                em.RemoveComponent(child, new TypePack<EntityInHierarchy, EntityInHierarchyCleanup>());
-            }
+                TransferFullLEG(em, parent, child);
+            UpdateCleanup(em, parent);
+            em.RemoveComponent(child, new TypePack<EntityInHierarchy, EntityInHierarchyCleanup>());
         }
 
         static unsafe void AddRootChildToRootParent(EntityManager em, Entity parent, Entity child, InheritanceFlags flags, bool createOrAppendLEG)
         {
-            bool childHasCleanup = em.HasBuffer<EntityInHierarchyCleanup>(child);
-            em.AddComponent<RootReference>(child);
+            bool addTickedToChild                                                    = em.HasComponent<TickedEntityTag>(child);
+            bool addNormalToChild                                                    = !addTickedToChild || em.HasComponent<WorldTransform>(child);
+            bool addTickedToParent                                                   = addTickedToChild || em.HasComponent<TickedEntityTag>(parent);
+            bool addNormalToParent                                                   = addNormalToChild || em.HasComponent<WorldTransform>(parent);
+            bool childHasCleanup                                                     = em.HasBuffer<EntityInHierarchyCleanup>(child);
+            AssureAncestryHasComponents(em, parent, new RootReference { m_rootEntity = parent, m_indexInHierarchy = 0 }, addNormalToParent, addTickedToParent);
+            AddChildComponents(em, parent, child, addNormalToChild, addTickedToChild);
 
             var dstHierarchy = em.GetBuffer<EntityInHierarchy>(parent);
             var srcHierarchy = em.GetBuffer<EntityInHierarchy>(child).AsNativeArray().AsReadOnlySpan();
 
             InsertSubtree(em, dstHierarchy, 0, srcHierarchy, flags);
 
-            if (childHasCleanup || !createOrAppendLEG)
-                GetOrAddAndCopyCleanup(em, parent);
             if (createOrAppendLEG)
-            {
-                var dstLeg = GetOrCreateLEG(em, parent);
-                AppendChildRootLEG(em, dstLeg, child);
-                em.RemoveComponent(child, new TypePack<EntityInHierarchy, EntityInHierarchyCleanup, LinkedEntityGroup>());
-            }
-            else
-            {
-                em.RemoveComponent(child, new TypePack<EntityInHierarchy, EntityInHierarchyCleanup>());
-            }
+                TransferFullLEG(em, parent, child);
+            UpdateCleanup(em, parent);
+            em.RemoveComponent(child, new TypePack<EntityInHierarchy, EntityInHierarchyCleanup>());
         }
 
         static unsafe void AddRootChildToInternalParent(EntityManager em, Entity parent, Entity child, InheritanceFlags flags, bool createOrAppendLEG)
         {
-            bool childHasCleanup = em.HasBuffer<EntityInHierarchyCleanup>(child);
-            em.AddComponent<RootReference>(child);
+            bool addTickedToChild  = em.HasComponent<TickedEntityTag>(child);
+            bool addNormalToChild  = !addTickedToChild || em.HasComponent<WorldTransform>(child);
+            bool addTickedToParent = addTickedToChild || em.HasComponent<TickedEntityTag>(parent);
+            bool addNormalToParent = addNormalToChild || em.HasComponent<WorldTransform>(parent);
+            var  rootRef           = em.GetComponentData<RootReference>(parent);
+            AssureAncestryHasComponents(em, parent, rootRef, addNormalToParent, addTickedToParent);
+            AddChildComponents(em, parent, child, addNormalToChild, addTickedToChild);
 
-            var rootRef      = em.GetComponentData<RootReference>(parent);
             var dstHierarchy = GetHierarchy(em, rootRef.rootEntity, out var rootIsAlive);
             var srcHierarchy = em.GetBuffer<EntityInHierarchy>(child).AsNativeArray().AsReadOnlySpan();
 
             InsertSubtree(em, dstHierarchy, rootRef.indexInHierarchy, srcHierarchy, flags);
 
-            if (rootIsAlive)
-            {
-                if (childHasCleanup || !createOrAppendLEG)
-                    GetOrAddAndCopyCleanup(em, parent);
-                if (createOrAppendLEG)
-                {
-                    var dstLeg = GetOrCreateLEG(em, parent);
-                    AppendChildRootLEG(em, dstLeg, child);
-                }
-            }
             if (createOrAppendLEG)
-                em.RemoveComponent(child, new TypePack<EntityInHierarchy, EntityInHierarchyCleanup, LinkedEntityGroup>());
-            else
-                em.RemoveComponent(child, new TypePack<EntityInHierarchy, EntityInHierarchyCleanup>());
+                TransferFullLEG(em, rootRef.rootEntity, child);
+            UpdateCleanup(em, parent);
+            em.RemoveComponent(child, new TypePack<EntityInHierarchy, EntityInHierarchyCleanup>());
         }
 
         static unsafe void AddInternalChildToSoloParent(EntityManager em, Entity parent, Entity child, InheritanceFlags flags, bool createOrAppendLEG)
         {
-            ConvertSoloArchetypeToRootArchetype(em, parent, createOrAppendLEG, false);
+            bool addTickedToChild  = em.HasComponent<TickedEntityTag>(child);
+            bool addNormalToChild  = !addTickedToChild || em.HasComponent<WorldTransform>(child);
+            bool addTickedToParent = addTickedToChild || em.HasComponent<TickedEntityTag>(parent);
+            bool addNormalToParent = addNormalToChild || em.HasComponent<WorldTransform>(parent);
+            AddRootComponents(em, parent, createOrAppendLEG, false, addNormalToParent, addTickedToParent);
 
             var childRootRef    = em.GetComponentData<RootReference>(child);
             var childHierarchy  = GetHierarchy(em, childRootRef.rootEntity, out var childRootIsAlive);
@@ -294,22 +288,9 @@ namespace Latios.Transforms
                     em.RemoveComponent(childRootRef.rootEntity, new TypePack<EntityInHierarchy, EntityInHierarchyCleanup>());
                 }
 
-                bool transferredLeg = false;
-                if (childRootIsAlive && createOrAppendLEG)
-                {
-                    var childLeg = em.GetBuffer<LinkedEntityGroup>(childRootRef.rootEntity).Reinterpret<Entity>();
-                    var index    = childLeg.AsNativeArray().IndexOf(child);
-                    if (index >= 0)
-                    {
-                        childLeg.RemoveAtSwapBack(index);
-                        GetOrCreateLEG(em, parent).Add(child);
-                        transferredLeg = true;
-                    }
-                }
-                if (!transferredLeg || em.HasBuffer<EntityInHierarchyCleanup>(parent))
-                {
-                    GetOrAddAndCopyCleanup(em, parent);
-                }
+                if (createOrAppendLEG)
+                    TransferSubtreeLEG(em, parent, childRootRef.rootEntity, stackalloc EntityInHierarchy[] { new EntityInHierarchy { m_descendantEntity = child } });
+                UpdateCleanup(em, parent);
             }
             else
             {
@@ -341,34 +322,9 @@ namespace Latios.Transforms
                     em.RemoveComponent(childRootRef.rootEntity, new TypePack<EntityInHierarchy, EntityInHierarchyCleanup>());
                 }
 
-                bool transferredAllLeg = false;
-                if (childRootIsAlive && createOrAppendLEG)
-                {
-                    bool hadLeg       = em.HasBuffer<LinkedEntityGroup>(parent);
-                    var  dstLeg       = GetOrCreateLEG(em, parent);
-                    var  childLeg     = em.GetBuffer<LinkedEntityGroup>(childRootRef.rootEntity).Reinterpret<Entity>();
-                    transferredAllLeg = true;
-                    for (int i = 0; i < subtree.Length; i++)
-                    {
-                        var candidate = subtree[i].entity;
-                        // Todo: Optimize this.
-                        var index = childLeg.AsNativeArray().IndexOf(candidate);
-                        if (index >= 0)
-                        {
-                            childLeg.RemoveAtSwapBack(index);
-                            dstLeg.Add(candidate);
-                        }
-                        else
-                            transferredAllLeg = false;
-                    }
-                    // If we added the LEG for nothing, undo that.
-                    if (dstLeg.Length == 1 && !hadLeg)
-                        em.RemoveComponent<LinkedEntityGroup>(parent);
-                }
-                if (!transferredAllLeg || em.HasBuffer<EntityInHierarchyCleanup>(parent))
-                {
-                    GetOrAddAndCopyCleanup(em, parent);
-                }
+                if (createOrAppendLEG)
+                    TransferSubtreeLEG(em, parent, childRootRef.rootEntity, subtree);
+                UpdateCleanup(em, parent);
 
                 tsa.Dispose();
             }
@@ -376,6 +332,12 @@ namespace Latios.Transforms
 
         static unsafe void AddInternalChildToRootParentSameRoot(EntityManager em, Entity parent, Entity child, InheritanceFlags flags)
         {
+            bool addTickedToChild                                                    = em.HasComponent<TickedEntityTag>(child);
+            bool addNormalToChild                                                    = !addTickedToChild || em.HasComponent<WorldTransform>(child);
+            bool addTickedToParent                                                   = addTickedToChild || em.HasComponent<TickedEntityTag>(parent);
+            bool addNormalToParent                                                   = addNormalToChild || em.HasComponent<WorldTransform>(parent);
+            AssureAncestryHasComponents(em, parent, new RootReference { m_rootEntity = parent, m_indexInHierarchy = 0}, addNormalToParent, addTickedToParent);
+
             var childRootRef = em.GetComponentData<RootReference>(child);
             var hierarchy    = GetHierarchy(em, parent, out var rootIsAlive);
             if (hierarchy[childRootRef.indexInHierarchy].childCount == 0)
@@ -395,6 +357,12 @@ namespace Latios.Transforms
 
         static unsafe void AddInternalChildToRootParentSeparateRoot(EntityManager em, Entity parent, Entity child, InheritanceFlags flags, bool createOrAppendLEG)
         {
+            bool addTickedToChild                                                    = em.HasComponent<TickedEntityTag>(child);
+            bool addNormalToChild                                                    = !addTickedToChild || em.HasComponent<WorldTransform>(child);
+            bool addTickedToParent                                                   = addTickedToChild || em.HasComponent<TickedEntityTag>(parent);
+            bool addNormalToParent                                                   = addNormalToChild || em.HasComponent<WorldTransform>(parent);
+            AssureAncestryHasComponents(em, parent, new RootReference { m_rootEntity = parent, m_indexInHierarchy = 0 }, addNormalToParent, addTickedToParent);
+
             var childRootRef    = em.GetComponentData<RootReference>(child);
             var childHierarchy  = GetHierarchy(em, childRootRef.rootEntity, out var childRootIsAlive);
             var parentHierarchy = em.GetBuffer<EntityInHierarchy>(parent);
@@ -408,25 +376,9 @@ namespace Latios.Transforms
                     em.RemoveComponent(childRootRef.rootEntity, new TypePack<EntityInHierarchy, EntityInHierarchyCleanup>());
                 }
 
-                bool transferredLeg = false;
-                if (childRootIsAlive && createOrAppendLEG)
-                {
-                    if (em.HasBuffer<LinkedEntityGroup>(childRootRef.rootEntity))
-                    {
-                        var childLeg = em.GetBuffer<LinkedEntityGroup>(childRootRef.rootEntity).Reinterpret<Entity>();
-                        var index    = childLeg.AsNativeArray().IndexOf(child);
-                        if (index >= 0)
-                        {
-                            childLeg.RemoveAtSwapBack(index);
-                            GetOrCreateLEG(em, parent).Add(child);
-                            transferredLeg = true;
-                        }
-                    }
-                }
-                if (!transferredLeg || em.HasBuffer<EntityInHierarchyCleanup>(parent))
-                {
-                    GetOrAddAndCopyCleanup(em, parent);
-                }
+                if (createOrAppendLEG)
+                    TransferSubtreeLEG(em, parent, childRootRef.rootEntity, stackalloc EntityInHierarchy[] { new EntityInHierarchy { m_descendantEntity = child } });
+                UpdateCleanup(em, parent);
             }
             else
             {
@@ -440,37 +392,9 @@ namespace Latios.Transforms
                     em.RemoveComponent(childRootRef.rootEntity, new TypePack<EntityInHierarchy, EntityInHierarchyCleanup>());
                 }
 
-                bool transferredAllLeg = false;
-                if (childRootIsAlive && createOrAppendLEG)
-                {
-                    if (em.HasBuffer<LinkedEntityGroup>(childRootRef.rootEntity))
-                    {
-                        bool hadLeg       = em.HasBuffer<LinkedEntityGroup>(parent);
-                        var  dstLeg       = GetOrCreateLEG(em, parent);
-                        var  childLeg     = em.GetBuffer<LinkedEntityGroup>(childRootRef.rootEntity).Reinterpret<Entity>();
-                        transferredAllLeg = true;
-                        for (int i = 0; i < subtree.Length; i++)
-                        {
-                            var candidate = subtree[i].entity;
-                            // Todo: Optimize this.
-                            var index = childLeg.AsNativeArray().IndexOf(candidate);
-                            if (index >= 0)
-                            {
-                                childLeg.RemoveAtSwapBack(index);
-                                dstLeg.Add(candidate);
-                            }
-                            else
-                                transferredAllLeg = false;
-                        }
-                        // If we added the LEG for nothing, undo that.
-                        if (dstLeg.Length == 1 && !hadLeg)
-                            em.RemoveComponent<LinkedEntityGroup>(parent);
-                    }
-                }
-                if (!transferredAllLeg || em.HasBuffer<EntityInHierarchyCleanup>(parent))
-                {
-                    GetOrAddAndCopyCleanup(em, parent);
-                }
+                if (createOrAppendLEG)
+                    TransferSubtreeLEG(em, parent, childRootRef.rootEntity, subtree);
+                UpdateCleanup(em, parent);
 
                 tsa.Dispose();
             }
@@ -478,12 +402,19 @@ namespace Latios.Transforms
 
         static unsafe void AddInternalChildToInternalParentSameRoot(EntityManager em, Entity parent, Entity child, InheritanceFlags flags)
         {
+            bool addTickedToChild  = em.HasComponent<TickedEntityTag>(child);
+            bool addNormalToChild  = !addTickedToChild || em.HasComponent<WorldTransform>(child);
+            bool addTickedToParent = addTickedToChild || em.HasComponent<TickedEntityTag>(parent);
+            bool addNormalToParent = addNormalToChild || em.HasComponent<WorldTransform>(parent);
+            var  parentRootRef     = em.GetComponentData<RootReference>(parent);
+            AssureAncestryHasComponents(em, parent, parentRootRef, addNormalToParent, addTickedToParent);
+
             var childRootRef = em.GetComponentData<RootReference>(child);
             var hierarchy    = GetHierarchy(em, childRootRef.rootEntity, out var rootIsAlive);
             if (hierarchy[childRootRef.indexInHierarchy].childCount == 0)
             {
                 RemoveSingleDescendant(em, hierarchy, childRootRef.indexInHierarchy);
-                var parentRootRef = em.GetComponentData<RootReference>(parent);
+                parentRootRef = em.GetComponentData<RootReference>(parent);
                 AddSingleChild(em, hierarchy, parentRootRef.indexInHierarchy, child, flags);
             }
             else
@@ -492,16 +423,23 @@ namespace Latios.Transforms
                 var subtree = ExtractSubtree(ref tsa, hierarchy.AsNativeArray().AsReadOnlySpan(), childRootRef.indexInHierarchy);
                 RemoveSubtree(em, hierarchy, childRootRef.indexInHierarchy, subtree);
 
-                var parentRootRef = em.GetComponentData<RootReference>(parent);
+                parentRootRef = em.GetComponentData<RootReference>(parent);
                 InsertSubtree(em, hierarchy, parentRootRef.indexInHierarchy, subtree, flags);
                 tsa.Dispose();
             }
         }
 
-        static unsafe void AddInternalChildToInernalParentSeparateRoot(EntityManager em, Entity parent, Entity child, InheritanceFlags flags, bool createOrAppendLEG)
+        static unsafe void AddInternalChildToInternalParentSeparateRoot(EntityManager em, Entity parent, Entity child, InheritanceFlags flags, bool createOrAppendLEG)
         {
-            var childRootRef    = em.GetComponentData<RootReference>(child);
-            var parentRootRef   = em.GetComponentData<RootReference>(parent);
+            var childRootRef  = em.GetComponentData<RootReference>(child);
+            var parentRootRef = em.GetComponentData<RootReference>(parent);
+
+            bool addTickedToChild  = em.HasComponent<TickedEntityTag>(child);
+            bool addNormalToChild  = !addTickedToChild || em.HasComponent<WorldTransform>(child);
+            bool addTickedToParent = addTickedToChild || em.HasComponent<TickedEntityTag>(parent);
+            bool addNormalToParent = addNormalToChild || em.HasComponent<WorldTransform>(parent);
+            AssureAncestryHasComponents(em, parent, parentRootRef, addNormalToParent, addTickedToParent);
+
             var childHierarchy  = GetHierarchy(em, childRootRef.rootEntity, out var childRootIsAlive);
             var parentHierarchy = GetHierarchy(em, parentRootRef.rootEntity, out var parentRootIsAlive);
             if (childHierarchy[childRootRef.indexInHierarchy].childCount == 0)
@@ -514,25 +452,11 @@ namespace Latios.Transforms
                     em.RemoveComponent(childRootRef.rootEntity, new TypePack<EntityInHierarchy, EntityInHierarchyCleanup>());
                 }
 
-                bool transferredLeg = false;
-                if (parentRootIsAlive && childRootIsAlive && createOrAppendLEG)
-                {
-                    if (em.HasBuffer<LinkedEntityGroup>(childRootRef.rootEntity))
-                    {
-                        var childLeg = em.GetBuffer<LinkedEntityGroup>(childRootRef.rootEntity).Reinterpret<Entity>();
-                        var index    = childLeg.AsNativeArray().IndexOf(child);
-                        if (index >= 0)
-                        {
-                            childLeg.RemoveAtSwapBack(index);
-                            GetOrCreateLEG(em, parentRootRef.rootEntity).Add(child);
-                            transferredLeg = true;
-                        }
-                    }
-                }
-                if (!transferredLeg || em.HasBuffer<EntityInHierarchyCleanup>(parentRootRef.rootEntity))
-                {
-                    GetOrAddAndCopyCleanup(em, parentRootRef.rootEntity);
-                }
+                if (createOrAppendLEG)
+                    TransferSubtreeLEG(em, parentRootRef.rootEntity, childRootRef.rootEntity, stackalloc EntityInHierarchy[] { new EntityInHierarchy {
+                                                                                                                                   m_descendantEntity = child
+                                                                                                                               } });
+                UpdateCleanup(em, parent);
             }
             else
             {
@@ -546,37 +470,9 @@ namespace Latios.Transforms
                     em.RemoveComponent(childRootRef.rootEntity, new TypePack<EntityInHierarchy, EntityInHierarchyCleanup>());
                 }
 
-                bool transferredAllLeg = false;
-                if (parentRootIsAlive && childRootIsAlive && createOrAppendLEG)
-                {
-                    if (em.HasBuffer<LinkedEntityGroup>(childRootRef.rootEntity))
-                    {
-                        bool hadLeg       = em.HasBuffer<LinkedEntityGroup>(parentRootRef.rootEntity);
-                        var  dstLeg       = GetOrCreateLEG(em, parentRootRef.rootEntity);
-                        var  childLeg     = em.GetBuffer<LinkedEntityGroup>(childRootRef.rootEntity).Reinterpret<Entity>();
-                        transferredAllLeg = true;
-                        for (int i = 0; i < subtree.Length; i++)
-                        {
-                            var candidate = subtree[i].entity;
-                            // Todo: Optimize this.
-                            var index = childLeg.AsNativeArray().IndexOf(candidate);
-                            if (index >= 0)
-                            {
-                                childLeg.RemoveAtSwapBack(index);
-                                dstLeg.Add(candidate);
-                            }
-                            else
-                                transferredAllLeg = false;
-                        }
-                        // If we added the LEG for nothing, undo that.
-                        if (dstLeg.Length == 1 && !hadLeg)
-                            em.RemoveComponent<LinkedEntityGroup>(parentRootRef.rootEntity);
-                    }
-                }
-                if (!transferredAllLeg || em.HasBuffer<EntityInHierarchyCleanup>(parentRootRef.rootEntity))
-                {
-                    GetOrAddAndCopyCleanup(em, parentRootRef.rootEntity);
-                }
+                if (createOrAppendLEG)
+                    TransferSubtreeLEG(em, parentRootRef.rootEntity, childRootRef.rootEntity, subtree);
+                UpdateCleanup(em, parent);
 
                 tsa.Dispose();
             }
@@ -584,73 +480,199 @@ namespace Latios.Transforms
         #endregion
 
         #region Algorithms
-        static void ConvertSoloArchetypeToChildArchetype(EntityManager em, Entity parent, Entity child, InheritanceFlags flags)
+        static void AddChildComponents(EntityManager em, Entity parent, Entity child, bool requireNormal, bool requireTicked)
         {
-            ComponentTypeSet addToChild  = new TypePack<WorldTransform, RootReference>();
-            bool             childHadLtw = em.HasComponent<WorldTransform>(child);
-            em.AddComponent(child, addToChild);
-            if (!childHadLtw)
+            FixedList128Bytes<ComponentType> types = new FixedList128Bytes<ComponentType>();
+            types.Add(ComponentType.ReadWrite<RootReference>());
+            if (requireNormal)
+                types.Add(ComponentType.ReadWrite<WorldTransform>());
+            if (requireTicked)
+            {
+                types.Add(ComponentType.ReadWrite<TickedWorldTransform>());
+                types.Add(ComponentType.ReadWrite<TickedEntityTag>());
+            }
+            bool wasMissingNormal = requireNormal && !em.HasComponent<WorldTransform>(child);
+            bool wasMissingTicked = requireTicked && !em.HasComponent<TickedWorldTransform>(child);
+            em.AddComponent(child, new ComponentTypeSet(in types));
+
+            // Special copy cases
+            if (wasMissingNormal && !wasMissingTicked && requireTicked)
+            {
+                em.SetComponentData(child, em.GetComponentData<TickedWorldTransform>(child).ToUnticked());
+                return;
+            }
+            if (wasMissingTicked && !wasMissingNormal && requireNormal)
+            {
+                em.SetComponentData(child, em.GetComponentData<WorldTransform>(child).ToTicked());
+            }
+
+            if (wasMissingNormal)
                 em.SetComponentData(child, new WorldTransform { worldTransform = TransformQvvs.identity });
-            if (flags.HasCopyParent())
-                em.SetComponentData(child, em.GetComponentData<WorldTransform>(parent));
-            else if (!childHadLtw)
-            {
-                var parentTransform                    = em.GetComponentData<WorldTransform>(parent);
-                parentTransform.worldTransform.stretch = 1f;
-                em.SetComponentData(child, parentTransform);
-            }
+            if (wasMissingTicked)
+                em.SetComponentData(child, new TickedWorldTransform { worldTransform = TransformQvvs.identity });
         }
 
-        static void ConvertSoloArchetypeToRootArchetype(EntityManager em, Entity root, bool requireLEG, bool requireCleanup)
+        static void AddRootComponents(EntityManager em, Entity root, bool requireLEG, bool requireCleanup, bool requireNormal, bool requireTicked)
         {
-            ComponentTypeSet addToRoot;
+            FixedList128Bytes<ComponentType> types = new FixedList128Bytes<ComponentType>();
+            types.Add(ComponentType.ReadWrite<EntityInHierarchy>());
+            if (requireLEG)
+                types.Add(ComponentType.ReadWrite<LinkedEntityGroup>());
             if (requireCleanup)
+                types.Add(ComponentType.ReadWrite<EntityInHierarchyCleanup>());
+            if (requireNormal)
+                types.Add(ComponentType.ReadWrite<WorldTransform>());
+            if (requireTicked)
             {
-                if (requireLEG)
-                    addToRoot = new TypePack<WorldTransform, EntityInHierarchy, LinkedEntityGroup, EntityInHierarchyCleanup>();
-                else
-                    addToRoot = new TypePack<WorldTransform, EntityInHierarchy, EntityInHierarchyCleanup>();
+                types.Add(ComponentType.ReadWrite<TickedWorldTransform>());
+                types.Add(ComponentType.ReadWrite<TickedEntityTag>());
             }
-            else
+            bool wasMissingNormal = requireNormal && !em.HasComponent<WorldTransform>(root);
+            bool wasMissingTicked = requireTicked && !em.HasComponent<TickedWorldTransform>(root);
+            em.AddComponent(root, new ComponentTypeSet(in types));
+
+            // Special copy cases
+            if (wasMissingNormal && !wasMissingTicked && requireTicked)
             {
-                if (requireLEG)
-                    addToRoot = new TypePack<WorldTransform, EntityInHierarchy, LinkedEntityGroup>();
-                else
-                    addToRoot = new TypePack<WorldTransform, EntityInHierarchy, EntityInHierarchyCleanup>();
+                em.SetComponentData(root, em.GetComponentData<TickedWorldTransform>(root).ToUnticked());
+                return;
             }
-            bool parentHadLtw = em.HasComponent<WorldTransform>(root);
-            em.AddComponent(root, addToRoot);
-            if (!parentHadLtw)
+            if (wasMissingTicked && !wasMissingNormal && requireNormal)
+            {
+                em.SetComponentData(root, em.GetComponentData<WorldTransform>(root).ToTicked());
+            }
+
+            if (wasMissingNormal)
                 em.SetComponentData(root, new WorldTransform { worldTransform = TransformQvvs.identity });
+            if (wasMissingTicked)
+                em.SetComponentData(root, new TickedWorldTransform { worldTransform = TransformQvvs.identity });
         }
 
-        static DynamicBuffer<Entity> GetOrCreateLEG(EntityManager em, Entity entity)
+        static void AssureAncestryHasComponents(EntityManager em, Entity parent, RootReference parentRootRef, bool requireNormal, bool requireTicked)
         {
-            if (em.HasBuffer<LinkedEntityGroup>(entity))
-                return em.GetBuffer<LinkedEntityGroup>(entity).Reinterpret<Entity>();
-            else
+            FixedList128Bytes<ComponentType> types = new FixedList128Bytes<ComponentType>();
+            if (requireNormal)
+                types.Add(ComponentType.ReadWrite<WorldTransform>());
+            if (requireTicked)
             {
-                var result = em.AddBuffer<LinkedEntityGroup>(entity).Reinterpret<Entity>();
-                result.Add(entity);
-                return result;
+                types.Add(ComponentType.ReadWrite<TickedWorldTransform>());
+                types.Add(ComponentType.ReadWrite<TickedEntityTag>());
+            }
+
+            var activeEntity  = parent;
+            var activeRootRef = parentRootRef;
+
+            while (true)
+            {
+                bool wasMissingNormal = requireNormal && !em.HasComponent<WorldTransform>(activeEntity);
+                bool wasMissingTicked = requireTicked && !em.HasComponent<TickedWorldTransform>(activeEntity);
+                if (!wasMissingNormal && !wasMissingTicked)
+                    return;
+                em.AddComponent(activeEntity, new ComponentTypeSet(in types));
+
+                // Special copy cases
+                if (wasMissingNormal && !wasMissingTicked && requireTicked)
+                {
+                    em.SetComponentData(activeEntity, em.GetComponentData<TickedWorldTransform>(activeEntity).ToUnticked());
+                    return;
+                }
+                if (wasMissingTicked && !wasMissingNormal && requireNormal)
+                {
+                    em.SetComponentData(activeEntity, em.GetComponentData<WorldTransform>(activeEntity).ToTicked());
+                }
+                var handle       = activeRootRef.ToHandle(em);
+                var parentHandle = handle.FindParent(em);
+                if (parentHandle.isNull)
+                    break;
+                activeRootRef.m_indexInHierarchy = parentHandle.indexInHierarchy;
             }
         }
 
-        static void AppendChildRootLEG(EntityManager em, DynamicBuffer<Entity> dstLeg, Entity childToTransfer)
+        // Returns true if the whole subtree exists in the destination LEG
+        static void TransferFullLEG(EntityManager em, Entity dstRoot, Entity srcRoot)
         {
-            if (em.HasBuffer<LinkedEntityGroup>(childToTransfer))
+            DynamicBuffer<Entity> dstLEG = default;
+            if (em.HasBuffer<LinkedEntityGroup>(dstRoot))
+                dstLEG = em.GetBuffer<LinkedEntityGroup>(dstRoot).Reinterpret<Entity>();
+            else
             {
-                var srcLeg = em.GetBuffer<LinkedEntityGroup>(childToTransfer).Reinterpret<Entity>();
-                // Ugly copy because Unity safety flags this
-                for (int i = 0; i < srcLeg.Length; i++)
-                    dstLeg.Add(srcLeg[i]);
+                dstLEG = em.AddBuffer<LinkedEntityGroup>(dstRoot).Reinterpret<Entity>();
+                dstLEG.Add(dstRoot);
+            }
+
+            if (em.HasBuffer<LinkedEntityGroup>(srcRoot))
+            {
+                var srcLEG = em.GetBuffer<LinkedEntityGroup>(srcRoot).Reinterpret<Entity>();
+                for (int i = 0; i < srcLEG.Length; i++)
+                    dstLEG.Add(srcLEG[i]);
+                em.RemoveComponent<LinkedEntityGroup>(srcRoot);
             }
             else
-                dstLeg.Add(childToTransfer);
+                dstLEG.Add(srcRoot);
         }
 
-        static void GetOrAddAndCopyCleanup(EntityManager em, Entity root)
+        static void TransferSubtreeLEG(EntityManager em, Entity dstRoot, Entity srcRoot, ReadOnlySpan<EntityInHierarchy> subtree)
         {
+            if (!em.HasBuffer<LinkedEntityGroup>(srcRoot))
+                return;
+            var firstIndexToTransfer = -1;
+            var srcLEGArray          = em.GetBuffer<LinkedEntityGroup>(srcRoot).Reinterpret<Entity>().AsNativeArray();
+            for (int i = 0; i < subtree.Length; i++)
+            {
+                if (srcLEGArray.Contains(subtree[i].entity))
+                {
+                    firstIndexToTransfer = i;
+                    break;
+                }
+            }
+            if (firstIndexToTransfer == -1)
+                return;
+
+            DynamicBuffer<Entity> dstLEG = default;
+            if (em.HasBuffer<LinkedEntityGroup>(dstRoot))
+                dstLEG = em.GetBuffer<LinkedEntityGroup>(dstRoot).Reinterpret<Entity>();
+            else
+            {
+                dstLEG = em.AddBuffer<LinkedEntityGroup>(dstRoot).Reinterpret<Entity>();
+                dstLEG.Add(dstRoot);
+            }
+            var srcLEG = em.GetBuffer<LinkedEntityGroup>(srcRoot).Reinterpret<Entity>();
+            for (int i = firstIndexToTransfer; i < subtree.Length; i++)
+            {
+                var index = srcLEG.AsNativeArray().IndexOf(subtree[i].entity);
+                if (index >= 0)
+                {
+                    dstLEG.Add(subtree[i].entity);
+                    if (index > 0)
+                    {
+                        srcLEG.RemoveAtSwapBack(index);
+                    }
+                }
+            }
+            if (srcLEG.Length <= 1)
+                em.RemoveComponent<LinkedEntityGroup>(srcRoot);
+        }
+
+        static void UpdateCleanup(EntityManager em, Entity root)
+        {
+            if (!em.HasBuffer<EntityInHierarchy>(root))
+                return;
+            bool needsCleanup = em.HasBuffer<EntityInHierarchyCleanup>(root) || !em.HasBuffer<LinkedEntityGroup>(root);
+            if (!needsCleanup)
+            {
+                var currentLEG = em.GetBuffer<LinkedEntityGroup>(root, true).Reinterpret<Entity>().AsNativeArray();
+                var hierarchy  = em.GetBuffer<EntityInHierarchy>(root, true).AsNativeArray();
+                foreach (var e in hierarchy)
+                {
+                    if (!currentLEG.Contains(e.entity))
+                    {
+                        needsCleanup = true;
+                        break;
+                    }
+                }
+            }
+            if (!needsCleanup)
+                return;
             DynamicBuffer<EntityInHierarchyCleanup> cleanupBuffer;
             if (em.HasBuffer<EntityInHierarchyCleanup>(root))
                 cleanupBuffer = em.GetBuffer<EntityInHierarchyCleanup>(root);

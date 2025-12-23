@@ -7,10 +7,12 @@ using Unity.Properties;
 
 namespace Latios.Transforms
 {
+    #region Standard Components
     /// <summary>
     /// The world-space transform for all entities. It is also the local-space transform for root entities.
-    /// This component is always present, and the only required transform component for rendering with Kinemation.
-    /// Usage: Typically ReadOnly. It is strongly recommended you use TransformAspect for modifying the transform in world-space.
+    /// This component is always present regardless of role in the hierarchy, and the only required
+    /// transform component for rendering with Kinemation.
+    /// Usage: ReadOnly
     /// </summary>
 #if UNITY_NETCODE
     [StructLayout(LayoutKind.Explicit)]
@@ -113,6 +115,9 @@ namespace Latios.Transforms
         public float3 nonUniformScale => scale * stretch;
     }
 
+    /// <summary>
+    /// A reference to the root of the hierarchy. If this component is present, then this entity belongs to a hierarchy but is not the root.
+    /// </summary>
     public struct RootReference : IComponentData
     {
         internal EntityWithBuffer<EntityInHierarchy> m_rootEntity;
@@ -124,6 +129,143 @@ namespace Latios.Transforms
         public int indexInHierarchy => m_indexInHierarchy;
     }
 
+    /// <summary>
+    /// An element in a transform hierarchy. This buffer belongs to the root of the hierarchy.
+    /// </summary>
+    [InternalBufferCapacity(0)]
+    public struct EntityInHierarchy : IBufferElementData
+    {
+        internal EntityWith<RootReference> m_descendantEntity;
+        internal int                       m_parentIndex;
+        internal int                       m_firstChildIndex;
+        internal int                       m_childCount;
+        internal InheritanceFlags          m_flags;
+
+        [CreateProperty] public Entity entity => m_descendantEntity;
+        [CreateProperty] public int parentIndex => m_parentIndex;
+        [CreateProperty] public int childCount => m_childCount;
+        [CreateProperty] public int firstChildIndex => m_firstChildIndex;
+    }
+
+    /// <summary>
+    /// A copy of EntityInHierarchy, in case the root is destroyed.
+    /// </summary>
+    [InternalBufferCapacity(0)]
+    public struct EntityInHierarchyCleanup : IBufferElementData
+    {
+        public EntityInHierarchy entityInHierarchy;
+    }
+    #endregion
+
+    #region Ticked Components
+    /// <summary>
+    /// The ticked world-space transform for all entities. It is also the local-space transform for root entities.
+    /// This component is always present regardless of role in the hierarchy.
+    /// Usage: ReadOnly.
+    /// </summary>
+#if UNITY_NETCODE
+    [StructLayout(LayoutKind.Explicit)]
+#endif
+    public struct TickedWorldTransform : IComponentData
+    {
+        /// <summary>
+        /// The actual TransformQvvs representing the world-space transform of the entity.
+        /// Directly writing to this value is heavily discouraged.
+        /// </summary>
+#if UNITY_NETCODE
+        [FieldOffset(0)]
+#endif
+        public TransformQvvs worldTransform;
+
+        /// <summary>
+        /// The world-space position of the entity
+        /// </summary>
+        public float3 position => worldTransform.position;
+        /// <summary>
+        /// The world-space rotation of the entity
+        /// </summary>
+        public quaternion rotation => worldTransform.rotation;
+        /// <summary>
+        /// The world-space uniform scale of the entity
+        /// </summary>
+        public float scale => worldTransform.scale;
+        /// <summary>
+        /// The stretch of the entity relative to its coordinate space prior to local rotation and translation
+        /// </summary>
+        public float3 stretch => worldTransform.stretch;
+        /// <summary>
+        /// Convenience scale * stretch property
+        /// </summary>
+        public float3 nonUniformScale => scale * stretch;
+        /// <summary>
+        /// The worldIndex whose purpose is up to the user
+        /// </summary>
+        public int worldIndex => worldTransform.worldIndex;
+
+        /// <summary>
+        /// The unit forward vector (local Z+) of the entity in world-space
+        /// </summary>
+        public float3 forwardDirection => math.rotate(rotation, new float3(0f, 0f, 1f));
+        /// <summary>
+        /// The unit backward vector (local Z-) of the entity in world-space
+        /// </summary>
+        public float3 backwardDirection => math.rotate(rotation, new float3(0f, 0f, -1f));
+        /// <summary>
+        /// The unit left vector (local X-) of the entity in world-space
+        /// </summary>
+        public float3 leftDirection => math.rotate(rotation, new float3(-1f, 0f, 0f));
+        /// <summary>
+        /// The unit right vector (local X+) of the entity in world-space
+        /// </summary>
+        public float3 rightDirection => math.rotate(rotation, new float3(1f, 0f, 0f));
+        /// <summary>
+        /// The unit up vector (local Y+) of the entity in world-space
+        /// </summary>
+        public float3 upDirection => math.rotate(rotation, new float3(0f, 1f, 0f));
+        /// <summary>
+        /// The unit down vector (local Y-) of the entity in world-space
+        /// </summary>
+        public float3 downDirection => math.rotate(rotation, new float3(0f, -1f, 0f));
+
+#if UNITY_NETCODE
+        [FieldOffset(16)] public float3 __position;
+        [FieldOffset(0)]  public quaternion __rotation;
+        [FieldOffset(44)] public float __scale;
+        [FieldOffset(32)] public float3 __stretch;
+        [FieldOffset(28)] public int __worldIndex;
+#endif
+    }
+
+    /// <summary>
+    /// The TickedWorldTransform from the previous tick. This may be read for gameplay purposes.
+    /// </summary>
+    public struct TickedPreviousTransform : IComponentData
+    {
+        public TransformQvvs worldTransform;
+
+        public float3 position => worldTransform.position;
+        public quaternion rotation => worldTransform.rotation;
+        public float scale => worldTransform.scale;
+        public float3 stretch => worldTransform.stretch;
+        public float3 nonUniformScale => scale * stretch;
+    }
+
+    /// <summary>
+    /// The TickedWorldTransform from two ticks ago. This may be read for gameplay purposes.
+    /// </summary>
+    public struct TickedTwoAgoTransform : IComponentData
+    {
+        public TransformQvvs worldTransform;
+
+        public float3 position => worldTransform.position;
+        public quaternion rotation => worldTransform.rotation;
+        public float scale => worldTransform.scale;
+        public float3 stretch => worldTransform.stretch;
+        public float3 nonUniformScale => scale * stretch;
+    }
+    #endregion
+
+    #region Flags
     /// <summary>
     /// The mode flags that the transforms use to update the hierarchy.
     /// When the hierarchy updates, each entity can choose to keep the local transform properties
@@ -184,31 +326,11 @@ namespace Latios.Transforms
         WorldAll = WorldPosition | WorldRotation | WorldScale,
     }
 
-    [InternalBufferCapacity(0)]
-    public struct EntityInHierarchy : IBufferElementData
-    {
-        internal EntityWith<RootReference> m_descendantEntity;
-        internal int                       m_parentIndex;
-        internal int                       m_firstChildIndex;
-        internal int                       m_childCount;
-        internal InheritanceFlags          m_flags;
-
-        [CreateProperty] public Entity entity => m_descendantEntity;
-        [CreateProperty] public int parentIndex => m_parentIndex;
-        [CreateProperty] public int childCount => m_childCount;
-        [CreateProperty] public int firstChildIndex => m_firstChildIndex;
-    }
-
-    [InternalBufferCapacity(0)]
-    public struct EntityInHierarchyCleanup : IBufferElementData
-    {
-        public EntityInHierarchy entityInHierarchy;
-    }
-
     public static class InheritanceFlagsExtensions
     {
         public static bool HasCopyParent(this InheritanceFlags flags) => (flags & InheritanceFlags.CopyParent) == InheritanceFlags.CopyParent;
     }
+    #endregion
 }
 #endif
 

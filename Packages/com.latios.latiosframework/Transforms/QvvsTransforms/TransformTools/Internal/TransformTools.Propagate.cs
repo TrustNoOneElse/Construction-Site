@@ -44,11 +44,12 @@ namespace Latios.Transforms
             // commands only reference alive entities
             // Only commands that use CopyParentParentChanged are allowed when the inheritance flag is CopyParent
             // Multiple commands embedded within the first command's tree (or any previous command tree) is not yet supported
-            public static void WriteAndPropagate(NativeArray<EntityInHierarchy>      hierarchy,
-                                                 ReadOnlySpan<TransformQvvs>         commandTransformParts,
-                                                 ReadOnlySpan<WriteCommand>          commands,
-                                                 ref ComponentLookup<WorldTransform> transformLookup,
-                                                 EntityStorageInfoLookup esil)
+            public static void WriteAndPropagate<TWorld, TAlive>(NativeArray<EntityInHierarchy> hierarchy,
+                                                                 ReadOnlySpan<TransformQvvs>    commandTransformParts,
+                                                                 ReadOnlySpan<WriteCommand>     commands,
+                                                                 ref TWorld transformLookup,
+                                                                 ref TAlive aliveLookup) where TWorld : unmanaged, IWorldTransform where TAlive : unmanaged,
+            IAlive
             {
                 var tsa = ThreadStackAllocator.GetAllocator();
 
@@ -76,7 +77,7 @@ namespace Latios.Transforms
                             {
                                 m_hierarchy = hierarchy,
                                 m_index     = command.indexInHierarchy
-                            }, ref transformLookup, ref esil);
+                            }, ref transformLookup, ref aliveLookup);
                             // Don't advance the reader if we found a new entity out-of-tree
                             if (instructionsRead != 0)
                                 instructionsRead--;
@@ -112,7 +113,12 @@ namespace Latios.Transforms
                         }
                         commandsRead++;
                     }
-                    else if (!esil.IsAlive(entityInHierarchyToPropagate.entity))
+                    else if (!transformLookup.HasWorldTransform(entityInHierarchyToPropagate.entity))
+                    {
+                        // This entity only has one of either WorldTransform or TickedWorldTransform, and we are propagating the other type.
+                        entityInHierarchyToPropagate.m_childCount = 0;
+                    }
+                    else if (!aliveLookup.IsAlive(entityInHierarchyToPropagate.entity))
                     {
                         // The current handle is dead. If its parent is also dead, we need to propagate the override flags from the parent.
                         dead                         = true;
@@ -174,40 +180,41 @@ namespace Latios.Transforms
                 public bool             useOverrideFlagsForCopyParent;
             }
 
-            static OldNewWorldTransform ComputeCommandTransform(WriteCommand command,
-                                                                TransformQvvs writeData,
-                                                                EntityInHierarchyHandle handle,
-                                                                ref ComponentLookup<WorldTransform> transformLookup,
-                                                                ref EntityStorageInfoLookup esil)
+            static OldNewWorldTransform ComputeCommandTransform<TWorld, TAlive>(WriteCommand command,
+                                                                                TransformQvvs writeData,
+                                                                                EntityInHierarchyHandle handle,
+                                                                                ref TWorld transformLookup,
+                                                                                ref TAlive aliveLookup) where TWorld : unmanaged,
+            IWorldTransform where TAlive : unmanaged, IAlive
             {
-                ref var transform            = ref transformLookup.GetRefRW(handle.entity).ValueRW.worldTransform;
+                ref var transform            = ref transformLookup.GetWorldTransformRefRW(handle.entity).ValueRW.worldTransform;
                 var     oldNewWorldTransform = new OldNewWorldTransform { oldTransform = transform };
                 switch (command.writeType)
                 {
                     case WriteCommand.WriteType.LocalPositionSet:
                     {
-                        var localTransform      = LocalTransformFrom(handle, esil, ref transformLookup, out var parentTransform);
+                        var localTransform      = LocalTransformFrom(handle, ref aliveLookup, ref transformLookup, out var parentTransform);
                         localTransform.position = writeData.position;
                         qvvs.mul(ref transform, in parentTransform, in localTransform);
                         break;
                     }
                     case WriteCommand.WriteType.LocalRotationSet:
                     {
-                        var localTransform      = LocalTransformFrom(handle, esil, ref transformLookup, out var parentTransform);
+                        var localTransform      = LocalTransformFrom(handle, ref aliveLookup, ref transformLookup, out var parentTransform);
                         localTransform.rotation = writeData.rotation;
                         qvvs.mul(ref transform, in parentTransform, in localTransform);
                         break;
                     }
                     case WriteCommand.WriteType.LocalScaleSet:
                     {
-                        var localTransform   = LocalTransformFrom(handle, esil, ref transformLookup, out var parentTransform);
+                        var localTransform   = LocalTransformFrom(handle, ref aliveLookup, ref transformLookup, out var parentTransform);
                         localTransform.scale = writeData.scale;
                         qvvs.mul(ref transform, in parentTransform, in localTransform);
                         break;
                     }
                     case WriteCommand.WriteType.LocalTransformSet:
                     {
-                        var localTransform      = LocalTransformFrom(handle, esil, ref transformLookup, out var parentTransform);
+                        var localTransform      = LocalTransformFrom(handle, ref aliveLookup, ref transformLookup, out var parentTransform);
                         localTransform.position = writeData.position;
                         localTransform.rotation = writeData.rotation;
                         localTransform.scale    = writeData.scale;
@@ -231,28 +238,28 @@ namespace Latios.Transforms
                         break;
                     case WriteCommand.WriteType.LocalPositionDelta:
                     {
-                        var localTransform       = LocalTransformFrom(handle, esil, ref transformLookup, out var parentTransform);
+                        var localTransform       = LocalTransformFrom(handle, ref aliveLookup, ref transformLookup, out var parentTransform);
                         localTransform.position += writeData.position;
                         qvvs.mul(ref transform, in parentTransform, in localTransform);
                         break;
                     }
                     case WriteCommand.WriteType.LocalRotationDelta:
                     {
-                        var localTransform      = LocalTransformFrom(handle, esil, ref transformLookup, out var parentTransform);
+                        var localTransform      = LocalTransformFrom(handle, ref aliveLookup, ref transformLookup, out var parentTransform);
                         localTransform.rotation = math.mul(writeData.rotation, localTransform.rotation);
                         qvvs.mul(ref transform, in parentTransform, in localTransform);
                         break;
                     }
                     case WriteCommand.WriteType.LocalScaleDelta:
                     {
-                        var localTransform    = LocalTransformFrom(handle, esil, ref transformLookup, out var parentTransform);
+                        var localTransform    = LocalTransformFrom(handle, ref aliveLookup, ref transformLookup, out var parentTransform);
                         localTransform.scale *= writeData.scale;
                         qvvs.mul(ref transform, in parentTransform, in localTransform);
                         break;
                     }
                     case WriteCommand.WriteType.LocalTransformDelta:
                     {
-                        var localTransform = LocalTransformFrom(handle, esil, ref transformLookup, out var parentTransform);
+                        var localTransform = LocalTransformFrom(handle, ref aliveLookup, ref transformLookup, out var parentTransform);
                         qvvs.mul(ref transform, in writeData, in localTransform);
                         transform = qvvs.mul(in parentTransform, transform);
                         break;
@@ -274,8 +281,8 @@ namespace Latios.Transforms
                         break;
                     case WriteCommand.WriteType.CopyParentParentChanged:
                     {
-                        var parent = handle.FindParent(esil);
-                        transform  = transformLookup[parent.entity].worldTransform;
+                        var parent = handle.FindParent(ref aliveLookup);
+                        transform  = transformLookup.GetWorldTransform(parent.entity).worldTransform;
                         break;
                     }
                 }
@@ -283,13 +290,13 @@ namespace Latios.Transforms
                 return oldNewWorldTransform;
             }
 
-            static OldNewWorldTransform ComputeCommandTransform(WriteCommand command,
-                                                                TransformQvvs writeData,
-                                                                Entity entity,
-                                                                in TransformQvvs parentTransform,
-                                                                ref ComponentLookup<WorldTransform> transformLookup)
+            static OldNewWorldTransform ComputeCommandTransform<T>(WriteCommand command,
+                                                                   TransformQvvs writeData,
+                                                                   Entity entity,
+                                                                   in TransformQvvs parentTransform,
+                                                                   ref T transformLookup) where T : unmanaged, IWorldTransform
             {
-                ref var transform            = ref transformLookup.GetRefRW(entity).ValueRW.worldTransform;
+                ref var transform            = ref transformLookup.GetWorldTransformRefRW(entity).ValueRW.worldTransform;
                 var     oldNewWorldTransform = new OldNewWorldTransform { oldTransform = transform };
                 switch (command.writeType)
                 {
@@ -391,24 +398,24 @@ namespace Latios.Transforms
                 return oldNewWorldTransform;
             }
 
-            static OldNewWorldTransform ComputePropagatedTransform(in OldNewWorldTransform oldNewWorldTransform, InheritanceFlags flags, Entity entity,
-                                                                   ref ComponentLookup<WorldTransform> transformLookup)
+            static OldNewWorldTransform ComputePropagatedTransform<T>(in OldNewWorldTransform oldNewWorldTransform, InheritanceFlags flags, Entity entity,
+                                                                      ref T transformLookup) where T : unmanaged, IWorldTransform
             {
                 if (flags.HasCopyParent())
                 {
-                    transformLookup.GetRefRW(entity).ValueRW.worldTransform = oldNewWorldTransform.newTransform;
+                    transformLookup.GetWorldTransformRefRW(entity).ValueRW.worldTransform = oldNewWorldTransform.newTransform;
                     return oldNewWorldTransform;
                 }
                 if (flags == InheritanceFlags.WorldAll)
                 {
-                    var t                                          = transformLookup[entity].worldTransform;
+                    var t                                          = transformLookup.GetWorldTransform(entity).worldTransform;
                     return new OldNewWorldTransform { oldTransform = t, newTransform = t };
                 }
 
                 // Todo: If flags is not default, check change between old and new transforms of parent, because we might
                 // still be able to early out.
 
-                ref var worldTransform         = ref transformLookup.GetRefRW(entity).ValueRW.worldTransform;
+                ref var worldTransform         = ref transformLookup.GetWorldTransformRefRW(entity).ValueRW.worldTransform;
                 var     originalWorldTransform = worldTransform;
                 var     parentTransform        = oldNewWorldTransform.newTransform;
                 var     localTransform         = qvvs.inversemul(oldNewWorldTransform.oldTransform, originalWorldTransform);

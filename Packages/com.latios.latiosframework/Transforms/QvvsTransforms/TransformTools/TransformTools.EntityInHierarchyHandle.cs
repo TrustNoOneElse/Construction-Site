@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using static Latios.Transforms.TransformTools;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -93,28 +94,15 @@ namespace Latios.Transforms
             /// </summary>
             /// <param name="entityManager">The EntityManager this entity is managed by</param>
             /// <returns>The alive parent's handle if found, otherwise a null handle</returns>
-            public EntityInHierarchyHandle FindParent(EntityManager entityManager)
-            {
-                if (isRoot)
-                    return default;
-
-                var bp = bloodParent;
-                while (!bp.isRoot)
-                {
-                    if (entityManager.IsAlive(bp.entity))
-                        return bp;
-                    bp = bp.bloodParent;
-                }
-                if (entityManager.IsAlive(bp.entity))
-                    return bp;
-                return default;
-            }
+            public EntityInHierarchyHandle FindParent(EntityManager entityManager) => FindParent(ref EntityManagerAccess.From(ref entityManager));
             /// <summary>
             /// Finds the alive parent of the entity, if one exists
             /// </summary>
             /// <param name="entityStorageInfoLookup">An EntityStorageInfoLookup belonging the world the hierarchy is from</param>
             /// <returns>The alive parent's handle if found, otherwise a null handle</returns>
-            public EntityInHierarchyHandle FindParent(EntityStorageInfoLookup entityStorageInfoLookup)
+            public EntityInHierarchyHandle FindParent(EntityStorageInfoLookup entityStorageInfoLookup) => FindParent(ref EsilAlive.From(ref entityStorageInfoLookup));
+
+            internal EntityInHierarchyHandle FindParent<T>(ref T alive) where T : unmanaged, IAlive
             {
                 if (isRoot)
                     return default;
@@ -122,11 +110,11 @@ namespace Latios.Transforms
                 var bp = bloodParent;
                 while (!bp.isRoot)
                 {
-                    if (entityStorageInfoLookup.IsAlive(bp.entity))
+                    if (alive.IsAlive(bp.entity))
                         return bp;
                     bp = bp.bloodParent;
                 }
-                if (entityStorageInfoLookup.IsAlive(bp.entity))
+                if (alive.IsAlive(bp.entity))
                     return bp;
                 return default;
             }
@@ -223,6 +211,7 @@ namespace Latios.Transforms
             }
         }
 
+        #region Extensions
         /// <summary>
         /// Resolves the EntityInHierarchyHandle for the specified RootReference, allowing for fast hierarchy traversal.
         /// </summary>
@@ -231,16 +220,7 @@ namespace Latios.Transforms
         /// belongs to is located</returns>
         public static EntityInHierarchyHandle ToHandle(this RootReference rootRef, EntityManager entityManager)
         {
-            DynamicBuffer<EntityInHierarchy> buffer;
-            if (entityManager.HasBuffer<EntityInHierarchy>(rootRef.rootEntity))
-                buffer = entityManager.GetBuffer<EntityInHierarchy>(rootRef.rootEntity);
-            else
-                buffer = entityManager.GetBuffer<EntityInHierarchyCleanup>(rootRef.rootEntity).Reinterpret<EntityInHierarchy>();
-            return new EntityInHierarchyHandle
-            {
-                m_hierarchy = buffer.AsNativeArray(),
-                m_index     = rootRef.indexInHierarchy
-            };
+            return rootRef.ToHandle(ref EntityManagerAccess.From(ref entityManager));
         }
 
         /// <summary>
@@ -253,8 +233,20 @@ namespace Latios.Transforms
         public static EntityInHierarchyHandle ToHandle(this RootReference rootRef, ref BufferLookup<EntityInHierarchy> entityInHierarchyLookupRO,
                                                        ref BufferLookup<EntityInHierarchyCleanup> entityInHierarchyCleanupLookupRO)
         {
-            if (!entityInHierarchyLookupRO.TryGetBuffer(rootRef.rootEntity, out var buffer))
-                buffer = entityInHierarchyCleanupLookupRO[rootRef.rootEntity].Reinterpret<EntityInHierarchy>();
+            ComponentLookup<RootReference> dummy           = default;
+            var                            hierarchyAccess = new LookupHierarchy(dummy, entityInHierarchyLookupRO, entityInHierarchyCleanupLookupRO);
+            var                            result          = rootRef.ToHandle(ref hierarchyAccess);
+            hierarchyAccess.WriteBack(ref dummy, ref entityInHierarchyLookupRO, ref entityInHierarchyCleanupLookupRO);
+            return result;
+        }
+
+        internal static EntityInHierarchyHandle ToHandle<T>(this RootReference rootRef, ref T hierarchyAccess) where T : unmanaged, IHierarchy
+        {
+            if (!hierarchyAccess.TryGetEntityInHierarchy(rootRef.rootEntity, out var buffer))
+            {
+                hierarchyAccess.TryGetEntityInHierarchyCleanup(rootRef.rootEntity, out var temp);
+                buffer = temp.Reinterpret<EntityInHierarchy>();
+            }
             return new EntityInHierarchyHandle
             {
                 m_hierarchy = buffer.AsNativeArray(),
@@ -284,6 +276,21 @@ namespace Latios.Transforms
                 m_hierarchy = entityInHierarchyBuffer.AsNativeArray().Reinterpret<EntityInHierarchy>(),
                 m_index     = 0
             };
+        }
+        #endregion
+
+        internal static EntityInHierarchyHandle GetHierarchyHandle(Entity entity, EntityManager entityManager)
+        {
+            if (entityManager.HasComponent<RootReference>(entity))
+            {
+                var rootRef = entityManager.GetComponentData<RootReference>(entity);
+                return rootRef.ToHandle(entityManager);
+            }
+            if (entityManager.HasBuffer<EntityInHierarchy>(entity))
+                return entityManager.GetBuffer<EntityInHierarchy>(entity).GetRootHandle();
+            if (entityManager.HasBuffer<EntityInHierarchyCleanup>(entity))
+                return entityManager.GetBuffer<EntityInHierarchyCleanup>(entity).GetRootHandle();
+            return default;
         }
 
         [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS")]
