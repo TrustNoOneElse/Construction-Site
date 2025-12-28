@@ -141,6 +141,8 @@ namespace Latios.Transforms
                 return count;
             }
 
+            internal bool isCopyParent => !isNull && !isRoot && m_hierarchy[m_index].m_flags.HasCopyParent();
+
             /// <summary>
             /// A collection of blood children in the hierarchy
             /// </summary>
@@ -290,6 +292,20 @@ namespace Latios.Transforms
                 return entityManager.GetBuffer<EntityInHierarchy>(entity).GetRootHandle();
             if (entityManager.HasBuffer<EntityInHierarchyCleanup>(entity))
                 return entityManager.GetBuffer<EntityInHierarchyCleanup>(entity).GetRootHandle();
+            return default;
+        }
+
+        internal static EntityInHierarchyHandle GetHierarchyHandle(Entity entity,
+                                                                   ref ComponentLookup<RootReference>         rootReferenceLookupRO,
+                                                                   ref BufferLookup<EntityInHierarchy>        entityInHierarchyLookupRO,
+                                                                   ref BufferLookup<EntityInHierarchyCleanup> entityInHierarchyCleanupLookupRO)
+        {
+            if (rootReferenceLookupRO.TryGetComponent(entity, out var rootRef))
+                return rootRef.ToHandle(ref entityInHierarchyLookupRO, ref entityInHierarchyCleanupLookupRO);
+            if (entityInHierarchyLookupRO.TryGetBuffer(entity, out var buffer))
+                return buffer.GetRootHandle();
+            if (entityInHierarchyCleanupLookupRO.TryGetBuffer(entity, out var cleanup))
+                return cleanup.GetRootHandle();
             return default;
         }
 
