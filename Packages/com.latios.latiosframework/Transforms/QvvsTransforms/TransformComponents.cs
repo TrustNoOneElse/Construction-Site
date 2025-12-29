@@ -331,6 +331,32 @@ namespace Latios.Transforms
         public static bool HasCopyParent(this InheritanceFlags flags) => (flags & InheritanceFlags.CopyParent) == InheritanceFlags.CopyParent;
     }
     #endregion
+
+    #region Queries
+    public static class TransformQueryExtensions
+    {
+        /// <summary>
+        /// Ensures only entities that do not have a parent are included in the query
+        /// </summary>
+        public static FluentQuery RootsOnly(this FluentQuery query) => query.Without<RootReference>();
+        /// <summary>
+        /// Ensures only alive entities that do not have a parent but do have children are included in the query
+        /// </summary>
+        public static FluentQuery AliveRootsWithBloodChildren(this FluentQuery query) => query.With<EntityInHierarchy>();
+        /// <summary>
+        /// Ensures only dead root entities pending alive blood descendants are included in the query
+        /// </summary>
+        public static FluentQuery DeadRootsWithBloodChildren(this FluentQuery query) => query.With<EntityInHierarchyCleanup>().Without<EntityInHierarchy>();
+        /// <summary>
+        /// Ensures only entities which have blood parents are included in the query
+        /// </summary>
+        public static FluentQuery WithBloodParent(this FluentQuery query) => query.With<RootReference>();
+        /// <summary>
+        /// Ensures only entities that do not have parents nor children are included in the query
+        /// </summary>
+        public static FluentQuery WithoutHierarchy(this FluentQuery query) => query.Without<RootReference, EntityInHierarchy, EntityInHierarchyCleanup>();
+    }
+    #endregion
 }
 #endif
 

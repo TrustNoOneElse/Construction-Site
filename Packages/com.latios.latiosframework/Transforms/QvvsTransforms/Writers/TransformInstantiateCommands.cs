@@ -13,6 +13,11 @@ namespace Latios.Transforms
     [BurstCompile]
     public struct WorldTransformCommand : IInstantiateCommand
     {
+        public WorldTransformCommand(TransformQvvs newWorldTransform)
+        {
+            this.newWorldTransform = newWorldTransform;
+        }
+
         public TransformQvvs newWorldTransform;
 
         public FunctionPointer<IInstantiateCommand.OnPlayback> GetFunctionPointer()
