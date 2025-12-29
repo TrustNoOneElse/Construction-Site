@@ -48,7 +48,7 @@ namespace Latios.Transforms
         /// </summary>
         /// <param name="entity">The entity to set the WorldTransform for</param>
         /// <param name="newWorldTransform">The new WorldTransform value</param>
-        /// <param name="transformLookup">A write-accessible ComponentLookup. Writing to multiple entities within the same hierarchy from different threads is not safe!</param>
+        /// <param name="transformLookupRW">A write-accessible ComponentLookup. Writing to multiple entities within the same hierarchy from different threads is not safe!</param>
         /// <param name="entityStorageInfoLookup">An EntityStorageInfoLookup from the same world the hierarchy belongs to</param>
         /// <param name="rootReferenceLookupRO">A readonly ComponentLookup to the RootReference component</param>
         /// <param name="entityInHierarchyLookupRO">A readonly BufferLookup to the EntityInHierarchy dynamic buffer</param>
@@ -75,7 +75,7 @@ namespace Latios.Transforms
         /// </summary>
         /// <param name="handle">The hierarchy handle representing the entity whose WorldTransform should be replaced</param>
         /// <param name="newWorldTransform">The new WorldTransform value</param>
-        /// <param name="transformLookup">A write-accessible ComponentLookup. Writing to multiple entities within the same hierarchy from different threads is not safe!</param>
+        /// <param name="transformLookupRW">A write-accessible ComponentLookup. Writing to multiple entities within the same hierarchy from different threads is not safe!</param>
         /// <param name="entityStorageInfoLookup">An EntityStorageInfoLookup from the same world the hierarchy belongs to</param>
         public static void SetWorldTransform(EntityInHierarchyHandle handle,
                                              in TransformQvvs newWorldTransform,
@@ -138,7 +138,7 @@ namespace Latios.Transforms
         /// </summary>
         /// <param name="entity">The entity to set the TickedWorldTransform for</param>
         /// <param name="newTickedWorldTransform">The new TickedWorldTransform value</param>
-        /// <param name="transformLookup">A write-accessible ComponentLookup. Writing to multiple entities within the same hierarchy from different threads is not safe!</param>
+        /// <param name="transformLookupRW">A write-accessible ComponentLookup. Writing to multiple entities within the same hierarchy from different threads is not safe!</param>
         /// <param name="entityStorageInfoLookup">An EntityStorageInfoLookup from the same world the hierarchy belongs to</param>
         /// <param name="rootReferenceLookupRO">A readonly ComponentLookup to the RootReference component</param>
         /// <param name="entityInHierarchyLookupRO">A readonly BufferLookup to the EntityInHierarchy dynamic buffer</param>
@@ -165,7 +165,7 @@ namespace Latios.Transforms
         /// </summary>
         /// <param name="handle">The hierarchy handle representing the entity whose TickedWorldTransform should be replaced</param>
         /// <param name="newTickedWorldTransform">The new TickedWorldTransform value</param>
-        /// <param name="transformLookup">A write-accessible ComponentLookup. Writing to multiple entities within the same hierarchy from different threads is not safe!</param>
+        /// <param name="transformLookupRW">A write-accessible ComponentLookup. Writing to multiple entities within the same hierarchy from different threads is not safe!</param>
         /// <param name="entityStorageInfoLookup">An EntityStorageInfoLookup from the same world the hierarchy belongs to</param>
         public static void SetTickedWorldTransform(EntityInHierarchyHandle handle,
                                                    in TransformQvvs newTickedWorldTransform,
