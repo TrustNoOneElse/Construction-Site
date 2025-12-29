@@ -36,7 +36,7 @@ namespace Latios.Transforms
             CheckChangeParent(em, parent, child, inheritanceFlags, transferLinkedEntityGroup);
 
             bool parentHasRootRef   = em.HasComponent<RootReference>(parent);
-            bool childHasRootRef    = em.HasComponent<RootReference>(parent);
+            bool childHasRootRef    = em.HasComponent<RootReference>(child);
             bool parentHasHierarchy = !parentHasRootRef && em.HasBuffer<EntityInHierarchy>(parent);
             bool childHasHierarchy  = !childHasRootRef && em.HasBuffer<EntityInHierarchy>(child);
 
