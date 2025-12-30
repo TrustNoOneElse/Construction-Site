@@ -7,7 +7,7 @@ namespace Latios.Transforms
 	{
         #region Apply Local Transform Delta
         /// <summary>
-        /// Multiplies the entity's current local transform by the specified transform, and sets the entity's
+        /// Multiplies the entity's current local transform by the specified transform and sets the entity's
         /// local transform to the result. The expression is as follows:
         /// localTransform = qvvs.mul(appliedTransform, localTransform)
         /// </summary>
@@ -28,7 +28,7 @@ namespace Latios.Transforms
         }
 
         /// <summary>
-        /// Multiplies the entity's current local transform by the specified transform, and sets the entity's
+        /// Multiplies the entity's current local transform by the specified transform and sets the entity's
         /// local transform to the result. The expression is as follows:
         /// localTransform = qvvs.mul(appliedTransform, localTransform)
         /// </summary>
@@ -50,7 +50,7 @@ namespace Latios.Transforms
         }
 
         /// <summary>
-        /// Multiplies the entity's current local transform by the specified transform, and sets the entity's
+        /// Multiplies the entity's current local transform by the specified transform and sets the entity's
         /// local transform to the result. The expression is as follows:
         /// localTransform = qvvs.mul(appliedTransform, localTransform)
         /// </summary>
@@ -73,7 +73,7 @@ namespace Latios.Transforms
         }
 
         /// <summary>
-        /// Multiplies the entity's current local transform by the specified transform, and sets the entity's
+        /// Multiplies the entity's current local transform by the specified transform and sets the entity's
         /// local transform to the result. The expression is as follows:
         /// localTransform = qvvs.mul(appliedTransform, localTransform)
         /// </summary>
@@ -96,7 +96,7 @@ namespace Latios.Transforms
         }
 
         /// <summary>
-        /// Multiplies the entity's current local transform by the specified transform, and sets the entity's
+        /// Multiplies the entity's current local transform by the specified transform and sets the entity's
         /// local transform to the result. The expression is as follows:
         /// localTransform = qvvs.mul(appliedTransform, localTransform)
         /// </summary>
@@ -119,7 +119,7 @@ namespace Latios.Transforms
         }
 
         /// <summary>
-        /// Multiplies the entity's current local transform by the specified transform, and sets the entity's
+        /// Multiplies the entity's current local transform by the specified transform and sets the entity's
         /// local transform to the result. The expression is as follows:
         /// localTransform = qvvs.mul(appliedTransform, localTransform)
         /// </summary>
@@ -144,7 +144,7 @@ namespace Latios.Transforms
         }
 
         /// <summary>
-        /// Multiplies the entity's current local transform by the specified transform, and sets the entity's
+        /// Multiplies the entity's current local transform by the specified transform and sets the entity's
         /// local transform to the result. The expression is as follows:
         /// localTransform = qvvs.mul(appliedTransform, localTransform)
         /// </summary>
@@ -176,7 +176,7 @@ namespace Latios.Transforms
         }
 
         /// <summary>
-        /// Multiplies the entity's current local transform by the specified transform, and sets the entity's
+        /// Multiplies the entity's current local transform by the specified transform and sets the entity's
         /// local transform to the result. The expression is as follows:
         /// localTransform = qvvs.mul(appliedTransform, localTransform)
         /// </summary>
@@ -210,7 +210,7 @@ namespace Latios.Transforms
         }
 
         /// <summary>
-        /// Multiplies the entity's current local transform by the specified transform, and sets the entity's
+        /// Multiplies the entity's current local transform by the specified transform and sets the entity's
         /// local transform to the result. The expression is as follows:
         /// localTransform = qvvs.mul(appliedTransform, localTransform)
         /// </summary>
@@ -237,7 +237,7 @@ namespace Latios.Transforms
         }
 
         /// <summary>
-        /// Multiplies the entity's current local transform by the specified transform, and sets the entity's
+        /// Multiplies the entity's current local transform by the specified transform and sets the entity's
         /// local transform to the result. The expression is as follows:
         /// localTransform = qvvs.mul(appliedTransform, localTransform)
         /// </summary>
@@ -269,7 +269,7 @@ namespace Latios.Transforms
 
         #region Apply Ticked Local Transform Delta
         /// <summary>
-        /// Multiplies the entity's current ticked local transform by the specified transform, and sets the entity's
+        /// Multiplies the entity's current ticked local transform by the specified transform and sets the entity's
         /// ticked local transform to the result. The expression is as follows:
         /// tickedLocalTransform = qvvs.mul(appliedTransform, tickedLocalTransform)
         /// </summary>
@@ -290,7 +290,7 @@ namespace Latios.Transforms
         }
 
         /// <summary>
-        /// Multiplies the entity's current ticked local transform by the specified transform, and sets the entity's
+        /// Multiplies the entity's current ticked local transform by the specified transform and sets the entity's
         /// ticked local transform to the result. The expression is as follows:
         /// tickedLocalTransform = qvvs.mul(appliedTransform, tickedLocalTransform)
         /// </summary>
@@ -312,7 +312,7 @@ namespace Latios.Transforms
         }
 
         /// <summary>
-        /// Multiplies the entity's current ticked local transform by the specified transform, and sets the entity's
+        /// Multiplies the entity's current ticked local transform by the specified transform and sets the entity's
         /// ticked local transform to the result. The expression is as follows:
         /// tickedLocalTransform = qvvs.mul(appliedTransform, tickedLocalTransform)
         /// </summary>
@@ -335,7 +335,7 @@ namespace Latios.Transforms
         }
 
         /// <summary>
-        /// Multiplies the entity's current ticked local transform by the specified transform, and sets the entity's
+        /// Multiplies the entity's current ticked local transform by the specified transform and sets the entity's
         /// ticked local transform to the result. The expression is as follows:
         /// tickedLocalTransform = qvvs.mul(appliedTransform, tickedLocalTransform)
         /// </summary>
@@ -358,7 +358,7 @@ namespace Latios.Transforms
         }
 
         /// <summary>
-        /// Multiplies the entity's current ticked local transform by the specified transform, and sets the entity's
+        /// Multiplies the entity's current ticked local transform by the specified transform and sets the entity's
         /// ticked local transform to the result. The expression is as follows:
         /// tickedLocalTransform = qvvs.mul(appliedTransform, tickedLocalTransform)
         /// </summary>
@@ -381,7 +381,7 @@ namespace Latios.Transforms
         }
 
         /// <summary>
-        /// Multiplies the entity's current ticked local transform by the specified transform, and sets the entity's
+        /// Multiplies the entity's current ticked local transform by the specified transform and sets the entity's
         /// ticked local transform to the result. The expression is as follows:
         /// tickedLocalTransform = qvvs.mul(appliedTransform, tickedLocalTransform)
         /// </summary>
@@ -406,7 +406,7 @@ namespace Latios.Transforms
         }
 
         /// <summary>
-        /// Multiplies the entity's current ticked local transform by the specified transform, and sets the entity's
+        /// Multiplies the entity's current ticked local transform by the specified transform and sets the entity's
         /// ticked local transform to the result. The expression is as follows:
         /// tickedLocalTransform = qvvs.mul(appliedTransform, tickedLocalTransform)
         /// </summary>
@@ -438,7 +438,7 @@ namespace Latios.Transforms
         }
 
         /// <summary>
-        /// Multiplies the entity's current ticked local transform by the specified transform, and sets the entity's
+        /// Multiplies the entity's current ticked local transform by the specified transform and sets the entity's
         /// ticked local transform to the result. The expression is as follows:
         /// tickedLocalTransform = qvvs.mul(appliedTransform, tickedLocalTransform)
         /// </summary>
@@ -472,7 +472,7 @@ namespace Latios.Transforms
         }
 
         /// <summary>
-        /// Multiplies the entity's current ticked local transform by the specified transform, and sets the entity's
+        /// Multiplies the entity's current ticked local transform by the specified transform and sets the entity's
         /// ticked local transform to the result. The expression is as follows:
         /// tickedLocalTransform = qvvs.mul(appliedTransform, tickedLocalTransform)
         /// </summary>
@@ -499,7 +499,7 @@ namespace Latios.Transforms
         }
 
         /// <summary>
-        /// Multiplies the entity's current ticked local transform by the specified transform, and sets the entity's
+        /// Multiplies the entity's current ticked local transform by the specified transform and sets the entity's
         /// ticked local transform to the result. The expression is as follows:
         /// tickedLocalTransform = qvvs.mul(appliedTransform, tickedLocalTransform)
         /// </summary>
