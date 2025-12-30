@@ -30,6 +30,32 @@ namespace Latios.Psyshock
 #else
         public static implicit operator Entity(SafeEntity e) => e.m_entity;
 #endif
+
+#if !LATIOS_TRANSFORMS_UNITY
+        /// <summary>
+        /// Assuming this SafeEntity is a solo or root entity, creates a TransformsKey for this entity
+        /// to use with TransformsComponentLookup and TransformsBufferLookup
+        /// </summary>
+        /// <param name="entityStorageInfoLookup">An EntityStorageInfoLookup used to validate the entity is a solo or root entity</param>
+        /// <returns>A TransformsKey used for safe hierarchy access</returns>
+        public TransformsKey CreateTransformsKey(EntityStorageInfoLookup entityStorageInfoLookup)
+        {
+            ValidateSafeEntityIsSafe();
+            return TransformsKey.CreateFromExclusivelyAccessedRoot(entity, entityStorageInfoLookup);
+        }
+
+        [Conditional("ENABLE_UNITY_COLLECTIONS_CHECKS")]
+        void ValidateSafeEntityIsSafe()
+        {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            if (m_entity.Index < 0)
+            {
+                throw new InvalidOperationException(
+                    "The entity is not safe to convert into a TransformsKey. This could be because the scheduling mode does not support safe entity lookup, or because the entity in a PairStream was not granted read-write access at its creation.");
+            }
+#endif
+        }
+#endif
     }
 
     /// <summary>
@@ -165,7 +191,7 @@ namespace Latios.Psyshock
     /// Read-Write access in parallel using SafeEntity types when it is guaranteed safe to do so.
     /// You can implicitly cast a BufferLookup<typeparamref name="T"/> to this type.
     /// </summary>
-    /// <typeparam name="T">A type implementing IComponentData</typeparam>
+    /// <typeparam name="T">A type implementing IBufferElementData</typeparam>
     public struct PhysicsBufferLookup<T> where T : unmanaged, IBufferElementData
     {
         [NativeDisableParallelForRestriction]

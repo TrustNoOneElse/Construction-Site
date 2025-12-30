@@ -6,6 +6,8 @@ using Unity.Mathematics;
 // 1) Use RefRW on lookups that both read and write WorldTransform.
 // 2) Update parameter descriptions (mainly the deltas, which should use the action words translate, rotate, ect)
 // 3) Implement inverse transforms
+// 4) Implement TransformsComponentLookup and TransformsKey variants (already done for SetWorldTransform)
+// 5) Support ComponentBroker
 
 namespace Latios.Transforms
 {
@@ -77,6 +79,35 @@ namespace Latios.Transforms
         }
 
         /// <summary>
+        /// Sets the WorldTransform of an entity.
+        /// </summary>
+        /// <param name="entity">The entity to set the WorldTransform for</param>
+        /// <param name="newWorldTransform">The new WorldTransform value</param>
+        /// <param name="key">A key to ensure the hierarchy is safe to access</param>
+        /// <param name="transformLookupRW">A TransformsComponentLookup for parallel write access when the hierarchy is safe to access</param>
+        /// <param name="entityStorageInfoLookup">An EntityStorageInfoLookup from the same world the hierarchy belongs to</param>
+        /// <param name="rootReferenceLookupRO">A readonly ComponentLookup to the RootReference component</param>
+        /// <param name="entityInHierarchyLookupRO">A readonly BufferLookup to the EntityInHierarchy dynamic buffer</param>
+        /// <param name="entityInHierarchyCleanupLookupRO">A readonly BufferLookup to the EntityInHierarchyCleanup dynamic buffer</param>
+        public static void SetWorldTransform(Entity entity,
+                                             in TransformQvvs newWorldTransform,
+                                             TransformsKey key,
+                                             ref TransformsComponentLookup<WorldTransform> transformLookupRW,
+                                             ref EntityStorageInfoLookup entityStorageInfoLookup,
+                                             ref ComponentLookup<RootReference>            rootReferenceLookupRO,
+                                             ref BufferLookup<EntityInHierarchy>           entityInHierarchyLookupRO,
+                                             ref BufferLookup<EntityInHierarchyCleanup>    entityInHierarchyCleanupLookupRO)
+        {
+            var handle = GetHierarchyHandle(entity, ref rootReferenceLookupRO, ref entityInHierarchyLookupRO, ref entityInHierarchyCleanupLookupRO);
+            if (handle.isNull)
+            {
+                transformLookupRW.GetCheckedLookup(handle.root.entity, key)[entity] = new WorldTransform { worldTransform = newWorldTransform };
+                return;
+            }
+            SetWorldTransform(handle, in newWorldTransform, ref transformLookupRW.GetCheckedLookup(entity, key), ref entityStorageInfoLookup);
+        }
+
+        /// <summary>
         /// Sets the WorldTransform for the entity corresponding to the specified hierarchy handle.
         /// </summary>
         /// <param name="handle">The hierarchy handle representing the entity whose WorldTransform should be replaced</param>
@@ -98,6 +129,33 @@ namespace Latios.Transforms
                                                           writeType        = Propagate.WriteCommand.WriteType.WorldTransformSet
                                                       } };
             Propagate.WriteAndPropagate(handle.m_hierarchy, transforms, commands, ref LookupWorldTransform.From(ref transformLookupRW),
+                                        ref EsilAlive.From(ref entityStorageInfoLookup));
+        }
+
+        /// <summary>
+        /// Sets the WorldTransform for the entity corresponding to the specified hierarchy handle.
+        /// </summary>
+        /// <param name="handle">The hierarchy handle representing the entity whose WorldTransform should be replaced</param>
+        /// <param name="newWorldTransform">The new WorldTransform value</param>
+        /// <param name="key">A key to ensure the hierarchy is safe to access</param>
+        /// <param name="transformLookupRW">A TransformsComponentLookup for parallel write access when the hierarchy is safe to access</param>
+        /// <param name="entityStorageInfoLookup">An EntityStorageInfoLookup from the same world the hierarchy belongs to</param>
+        public static void SetWorldTransform(EntityInHierarchyHandle handle,
+                                             in TransformQvvs newWorldTransform,
+                                             TransformsKey key,
+                                             ref TransformsComponentLookup<WorldTransform> transformLookupRW,
+                                             ref EntityStorageInfoLookup entityStorageInfoLookup)
+        {
+            if (handle.isCopyParent)
+                return;
+            Span<TransformQvvs>          transforms = stackalloc TransformQvvs[] { newWorldTransform };
+            Span<Propagate.WriteCommand> commands   =
+                stackalloc Propagate.WriteCommand[] { new Propagate.WriteCommand
+                                                      {
+                                                          indexInHierarchy = handle.indexInHierarchy,
+                                                          writeType        = Propagate.WriteCommand.WriteType.WorldTransformSet
+                                                      } };
+            Propagate.WriteAndPropagate(handle.m_hierarchy, transforms, commands, ref LookupWorldTransform.From(ref transformLookupRW.GetCheckedLookup(handle.root.entity, key)),
                                         ref EsilAlive.From(ref entityStorageInfoLookup));
         }
 
@@ -167,6 +225,35 @@ namespace Latios.Transforms
         }
 
         /// <summary>
+        /// Sets the TickedWorldTransform of an entity.
+        /// </summary>
+        /// <param name="entity">The entity to set the TickedWorldTransform for</param>
+        /// <param name="newTickedWorldTransform">The new TickedWorldTransform value</param>
+        /// <param name="key">A key to ensure the hierarchy is safe to access</param>
+        /// <param name="transformLookupRW">A TransformsComponentLookup for parallel write access when the hierarchy is safe to access</param>
+        /// <param name="entityStorageInfoLookup">An EntityStorageInfoLookup from the same world the hierarchy belongs to</param>
+        /// <param name="rootReferenceLookupRO">A readonly ComponentLookup to the RootReference component</param>
+        /// <param name="entityInHierarchyLookupRO">A readonly BufferLookup to the EntityInHierarchy dynamic buffer</param>
+        /// <param name="entityInHierarchyCleanupLookupRO">A readonly BufferLookup to the EntityInHierarchyCleanup dynamic buffer</param>
+        public static void SetTickedWorldTransform(Entity entity,
+                                                   in TransformQvvs newTickedWorldTransform,
+                                                   TransformsKey key,
+                                                   ref TransformsComponentLookup<TickedWorldTransform> transformLookupRW,
+                                                   ref EntityStorageInfoLookup entityStorageInfoLookup,
+                                                   ref ComponentLookup<RootReference>                  rootReferenceLookupRO,
+                                                   ref BufferLookup<EntityInHierarchy>                 entityInHierarchyLookupRO,
+                                                   ref BufferLookup<EntityInHierarchyCleanup>          entityInHierarchyCleanupLookupRO)
+        {
+            var handle = GetHierarchyHandle(entity, ref rootReferenceLookupRO, ref entityInHierarchyLookupRO, ref entityInHierarchyCleanupLookupRO);
+            if (handle.isNull)
+            {
+                transformLookupRW.GetCheckedLookup(handle.root.entity, key)[entity] = new TickedWorldTransform { worldTransform = newTickedWorldTransform };
+                return;
+            }
+            SetTickedWorldTransform(handle, in newTickedWorldTransform, ref transformLookupRW.GetCheckedLookup(entity, key), ref entityStorageInfoLookup);
+        }
+
+        /// <summary>
         /// Sets the TickedWorldTransform for the entity corresponding to the specified hierarchy handle.
         /// </summary>
         /// <param name="handle">The hierarchy handle representing the entity whose TickedWorldTransform should be replaced</param>
@@ -188,6 +275,34 @@ namespace Latios.Transforms
                                                           writeType        = Propagate.WriteCommand.WriteType.WorldTransformSet
                                                       } };
             Propagate.WriteAndPropagate(handle.m_hierarchy, transforms, commands, ref LookupTickedWorldTransform.From(ref transformLookupRW),
+                                        ref EsilAlive.From(ref entityStorageInfoLookup));
+        }
+
+        /// <summary>
+        /// Sets the TickedWorldTransform for the entity corresponding to the specified hierarchy handle.
+        /// </summary>
+        /// <param name="handle">The hierarchy handle representing the entity whose TickedWorldTransform should be replaced</param>
+        /// <param name="newTickedWorldTransform">The new TickedWorldTransform value</param>
+        /// <param name="key">A key to ensure the hierarchy is safe to access</param>
+        /// <param name="transformLookupRW">A TransformsComponentLookup for parallel write access when the hierarchy is safe to access</param>
+        /// <param name="entityStorageInfoLookup">An EntityStorageInfoLookup from the same world the hierarchy belongs to</param>
+        public static void SetTickedWorldTransform(EntityInHierarchyHandle handle,
+                                                   in TransformQvvs newTickedWorldTransform,
+                                                   TransformsKey key,
+                                                   ref TransformsComponentLookup<TickedWorldTransform> transformLookupRW,
+                                                   ref EntityStorageInfoLookup entityStorageInfoLookup)
+        {
+            if (handle.isCopyParent)
+                return;
+            Span<TransformQvvs>          transforms = stackalloc TransformQvvs[] { newTickedWorldTransform };
+            Span<Propagate.WriteCommand> commands   =
+                stackalloc Propagate.WriteCommand[] { new Propagate.WriteCommand
+                                                      {
+                                                          indexInHierarchy = handle.indexInHierarchy,
+                                                          writeType        = Propagate.WriteCommand.WriteType.WorldTransformSet
+                                                      } };
+            Propagate.WriteAndPropagate(handle.m_hierarchy, transforms, commands,
+                                        ref LookupTickedWorldTransform.From(ref transformLookupRW.GetCheckedLookup(handle.root.entity, key)),
                                         ref EsilAlive.From(ref entityStorageInfoLookup));
         }
         #endregion
