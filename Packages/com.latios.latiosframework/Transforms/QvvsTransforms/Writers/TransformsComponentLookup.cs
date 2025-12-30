@@ -171,30 +171,30 @@ namespace Latios.Transforms
         }
 
         /// <summary>
-        /// Checks if the solo or root entity secured with the key has the component specified.
+        /// Checks entity has the component specified.
         /// This check is always valid regardless of whether such a component would be
         /// safe to access.
         /// </summary>
-        public bool HasComponent(Entity soloOrRootEntity, TransformsKey key) => lookup.HasComponent(soloOrRootEntity);
+        public bool HasComponent(Entity entity) => lookup.HasComponent(entity);
 
         /// <summary>
-        /// Checks if the entity handle secured with the key has the component specified.
+        /// Checks if the entity handle has the component specified.
         /// This check is always valid regardless of whether such a component would be
         /// safe to access.
         /// </summary>
-        public bool HasComponent(TransformTools.EntityInHierarchyHandle handle, TransformsKey key) => lookup.HasComponent(handle.entity);
+        public bool HasComponent(TransformTools.EntityInHierarchyHandle handle) => lookup.HasComponent(handle.entity);
 
         /// <summary>
         /// This is identical to ComponentDataFromEntity<typeparamref name="T"/>.DidChange().
         /// Note that neither method is deterministic and both can be prone to race conditions.
         /// </summary>
-        public bool DidChange(Entity soloOrRootEntity, TransformsKey key, uint version) => lookup.DidChange(soloOrRootEntity, version);
+        public bool DidChange(Entity entity, uint version) => lookup.DidChange(entity, version);
 
         /// <summary>
         /// This is identical to ComponentDataFromEntity<typeparamref name="T"/>.DidChange().
         /// Note that neither method is deterministic and both can be prone to race conditions.
         /// </summary>
-        public bool DidChange(TransformTools.EntityInHierarchyHandle handle, TransformsKey key, uint version) => lookup.DidChange(handle.entity, version);
+        public bool DidChange(TransformTools.EntityInHierarchyHandle handle, uint version) => lookup.DidChange(handle.entity, version);
 
         /// <summary>
         /// Fetches the enabled bit of the component on the entity handle secured with the key.
@@ -300,7 +300,7 @@ namespace Latios.Transforms
         }
 
         /// <summary>
-        /// Gets a reference to the buffer on the solo or root entity secured with the key.
+        /// Gets a reference to the buffer on the entity handle secured with the key.
         /// When safety checks are enabled, this throws when parallel safety cannot
         /// be guaranteed.
         /// </summary>
@@ -331,7 +331,7 @@ namespace Latios.Transforms
         }
 
         /// <summary>
-        /// Fetches the buffer on the solo or root entity secured with the key if the entity has the buffer type.
+        /// Fetches the buffer on the entity handle secured with the key if the entity has the buffer type.
         /// When safety checks are enabled, this throws when parallel safety cannot
         /// be guaranteed.
         /// </summary>
@@ -346,30 +346,30 @@ namespace Latios.Transforms
         }
 
         /// <summary>
-        /// Checks if the solo or root entity secured with the key has the buffer type specified.
+        /// Checks if the entity has the buffer type specified.
         /// This check is always valid regardless of whether such a buffer would be
         /// safe to access.
         /// </summary>
-        public bool HasBuffer(Entity soloOrRootEntity, TransformsKey key) => lookup.HasBuffer(soloOrRootEntity);
+        public bool HasBuffer(Entity entity) => lookup.HasBuffer(entity);
 
         /// <summary>
-        /// Checks if the solo or root entity secured with the key has the buffer type specified.
+        /// Checks if the entity handle has the buffer type specified.
         /// This check is always valid regardless of whether such a buffer would be
         /// safe to access.
         /// </summary>
-        public bool HasBuffer(TransformTools.EntityInHierarchyHandle handle, TransformsKey key) => lookup.HasBuffer(handle.entity);
+        public bool HasBuffer(TransformTools.EntityInHierarchyHandle handle) => lookup.HasBuffer(handle.entity);
 
         /// <summary>
         /// This is identical to BufferFromEntity<typeparamref name="T"/>.DidChange().
         /// Note that neither method is deterministic and both can be prone to race conditions.
         /// </summary>
-        public bool DidChange(Entity soloOrRootEntity, TransformsKey key, uint version) => lookup.DidChange(soloOrRootEntity, version);
+        public bool DidChange(Entity entity, uint version) => lookup.DidChange(entity, version);
 
         /// <summary>
         /// This is identical to BufferFromEntity<typeparamref name="T"/>.DidChange().
         /// Note that neither method is deterministic and both can be prone to race conditions.
         /// </summary>
-        public bool DidChange(TransformTools.EntityInHierarchyHandle handle, TransformsKey key, uint version) => lookup.DidChange(handle.entity, version);
+        public bool DidChange(TransformTools.EntityInHierarchyHandle handle, uint version) => lookup.DidChange(handle.entity, version);
 
         /// <summary>
         /// Fetches the enabled bit of the buffer on the solo or root entity secured with the key.
@@ -386,7 +386,7 @@ namespace Latios.Transforms
         }
 
         /// <summary>
-        /// Fetches the enabled bit of the buffer on the solo or root entity secured with the key.
+        /// Fetches the enabled bit of the buffer on the entity handle secured with the key.
         /// When safety checks are enabled, this throws when parallel safety cannot be guaranteed.
         /// The buffer must be of type IEnableableComponent.
         /// </summary>
@@ -463,6 +463,99 @@ namespace Latios.Transforms
                 entityIndex = -1,
                 esil        = entityStorageInfoLookup
             };
+        }
+
+        /// <summary>
+        /// Acquires an optional RefRO to the component on the solo or root entity secured with the key.
+        /// When safety checks are enabled, this throws when parallel safety cannot
+        /// be guaranteed.
+        /// </summary>
+        /// <param name="soloOrRootEntity">The entity to read or write</param>
+        /// <param name="key">A key that validates the entity is safe to access</param>
+        /// <returns>A RefRO instance which may or may not be valid (use IsValid to check)</returns>
+        public static RefRO<T> GetRO<T>(ref this ComponentBroker broker, Entity soloOrRootEntity, TransformsKey key) where T : unmanaged, IComponentData
+        {
+            if (broker.IsReadOnlyAccessType<T>())
+                return broker.GetRO<T>(soloOrRootEntity);
+            key.Validate(soloOrRootEntity);
+            return broker.GetROIgnoreParallelSafety<T>(soloOrRootEntity);
+        }
+
+        /// <summary>
+        /// Acquires an optional RefRO to the component on the entity handle secured with the key.
+        /// When safety checks are enabled, this throws when parallel safety cannot
+        /// be guaranteed.
+        /// </summary>
+        /// <param name="handle">The hierarchy handle of the entity to read or write</param>
+        /// <param name="key">A key that validates the entity is safe to access</param>
+        /// <returns>A RefRO instance which may or may not be valid (use IsValid to check)</returns>
+        public static RefRO<T> GetRO<T>(ref this ComponentBroker broker, TransformTools.EntityInHierarchyHandle handle, TransformsKey key) where T : unmanaged, IComponentData
+        {
+            if (broker.IsReadOnlyAccessType<T>())
+                return broker.GetRO<T>(handle.entity);
+            key.Validate(handle.root.entity);
+            return broker.GetROIgnoreParallelSafety<T>(handle.entity);
+        }
+
+        /// <summary>
+        /// Acquires an optional RefRW to the component on the solo or root entity secured with the key.
+        /// When safety checks are enabled, this throws when parallel safety cannot
+        /// be guaranteed.
+        /// </summary>
+        /// <param name="soloOrRootEntity">The entity to read or write</param>
+        /// <param name="key">A key that validates the entity is safe to access</param>
+        /// <returns>A RefRW instance which may or may not be valid (use IsValid to check)</returns>
+        public static RefRW<T> GetRW<T>(ref this ComponentBroker broker, Entity soloOrRootEntity, TransformsKey key) where T : unmanaged, IComponentData
+        {
+            key.Validate(soloOrRootEntity);
+            return broker.GetRWIgnoreParallelSafety<T>(soloOrRootEntity);
+        }
+
+        /// <summary>
+        /// Acquires an optional RefRW to the component on the entity handle secured with the key.
+        /// When safety checks are enabled, this throws when parallel safety cannot
+        /// be guaranteed.
+        /// </summary>
+        /// <param name="handle">The hierarchy handle of the entity to read or write</param>
+        /// <param name="key">A key that validates the entity is safe to access</param>
+        /// <returns>A RefRW instance which may or may not be valid (use IsValid to check)</returns>
+        public static RefRW<T> GetRW<T>(ref this ComponentBroker broker, TransformTools.EntityInHierarchyHandle handle, TransformsKey key) where T : unmanaged, IComponentData
+        {
+            key.Validate(handle.root.entity);
+            return broker.GetRWIgnoreParallelSafety<T>(handle.entity);
+        }
+
+        /// <summary>
+        /// Acquires an optional DynamicBuffer on the solo or root entity secured with the key.
+        /// When safety checks are enabled, this throws when parallel safety cannot
+        /// be guaranteed.
+        /// </summary>
+        /// <param name="soloOrRootEntity">The entity to read or write</param>
+        /// <param name="key">A key that validates the entity is safe to access</param>
+        /// <returns>A DynamicBuffer instance which may or may not be valid (use IsCreated to check)</returns>
+        public static DynamicBuffer<T> GetBuffer<T>(ref this ComponentBroker broker, Entity soloOrRootEntity, TransformsKey key) where T : unmanaged, IBufferElementData
+        {
+            if (broker.IsReadOnlyAccessType<T>())
+                return broker.GetBuffer<T>(soloOrRootEntity);
+            key.Validate(soloOrRootEntity);
+            return broker.GetBufferIgnoreParallelSafety<T>(soloOrRootEntity);
+        }
+
+        /// <summary>
+        /// Acquires an optional DynamicBuffer on the entity handle secured with the key.
+        /// When safety checks are enabled, this throws when parallel safety cannot
+        /// be guaranteed.
+        /// </summary>
+        /// <param name="handle">The hierarchy handle of the entity to read or write</param>
+        /// <param name="key">A key that validates the entity is safe to access</param>
+        /// <returns>A DynamicBuffer instance which may or may not be valid (use IsCreated to check)</returns>
+        public static DynamicBuffer<T> GetBuffer<T>(ref this ComponentBroker broker, TransformTools.EntityInHierarchyHandle handle, TransformsKey key) where T : unmanaged,
+        IBufferElementData
+        {
+            if (broker.IsReadOnlyAccessType<T>())
+                return broker.GetBuffer<T>(handle.entity);
+            key.Validate(handle.root.entity);
+            return broker.GetBufferIgnoreParallelSafety<T>(handle.entity);
         }
 
         internal static ref ComponentLookup<T> GetCheckedLookup<T>(ref this TransformsComponentLookup<T> locked, Entity rootEntity,

@@ -7,7 +7,8 @@ using Unity.Mathematics;
 // 2) Update parameter descriptions (mainly the deltas, which should use the action words translate, rotate, ect)
 // 3) Implement inverse transforms
 // 4) Implement TransformsComponentLookup and TransformsKey variants (already done for SetWorldTransform)
-// 5) Support ComponentBroker
+// 5) Support ComponentBroker (already done for SetWorldTransform)
+// 6) Probably split this into separate files per #region in a folder called Write
 
 namespace Latios.Transforms
 {
@@ -42,6 +43,83 @@ namespace Latios.Transforms
             if (handle.isCopyParent)
                 return;
             var                          lookup     = new EntityManagerAccess(entityManager);
+            Span<TransformQvvs>          transforms = stackalloc TransformQvvs[] { newWorldTransform };
+            Span<Propagate.WriteCommand> commands   =
+                stackalloc Propagate.WriteCommand[] { new Propagate.WriteCommand {
+                                                          indexInHierarchy = handle.indexInHierarchy,
+                                                          writeType        = Propagate.WriteCommand.WriteType.WorldTransformSet
+                                                      } };
+            Propagate.WriteAndPropagate(handle.m_hierarchy, transforms, commands, ref lookup, ref lookup);
+        }
+
+        /// <summary>
+        /// Sets the WorldTransform of an entity.
+        /// </summary>
+        /// <param name="entity">The entity to set the WorldTransform for</param>
+        /// <param name="newWorldTransform">The new WorldTransform value</param>
+        /// <param name="componentBroker">A ComponentBroker with write access to WorldTransform and read access to RootReference, EntityInHierarchy, and EntityInHierarchyCleanup</param>
+        public static void SetWorldTransform(Entity entity, in TransformQvvs newWorldTransform, ref ComponentBroker componentBroker)
+        {
+            var handle = GetHierarchyHandle(entity, ref componentBroker);
+            if (handle.isNull)
+            {
+                componentBroker.GetRW<WorldTransform>(entity).ValueRW.worldTransform = newWorldTransform;
+                return;
+            }
+            SetWorldTransform(handle, in newWorldTransform, ref componentBroker);
+        }
+
+        /// <summary>
+        /// Sets the WorldTransform of an entity.
+        /// </summary>
+        /// <param name="entity">The entity to set the WorldTransform for</param>
+        /// <param name="newWorldTransform">The new WorldTransform value</param>
+        /// <param name="key">A key to ensure the hierarchy is safe to access</param>
+        /// <param name="componentBroker">A ComponentBroker with write access to WorldTransform and read access to RootReference, EntityInHierarchy, and EntityInHierarchyCleanup</param>
+        public static void SetWorldTransform(Entity entity, in TransformQvvs newWorldTransform, TransformsKey key, ref ComponentBroker componentBroker)
+        {
+            var handle = GetHierarchyHandle(entity, ref componentBroker);
+            if (handle.isNull)
+            {
+                componentBroker.GetRW<WorldTransform>(entity, key).ValueRW.worldTransform = newWorldTransform;
+                return;
+            }
+            SetWorldTransform(handle, in newWorldTransform, ref componentBroker);
+        }
+
+        /// <summary>
+        /// Sets the WorldTransform for the entity corresponding to the specified hierarchy handle.
+        /// </summary>
+        /// <param name="handle">The hierarchy handle representing the entity whose WorldTransform should be replaced</param>
+        /// <param name="newWorldTransform">The new WorldTransform value</param>
+        /// <param name="componentBroker">A ComponentBroker with write access to WorldTransform and read access to RootReference, EntityInHierarchy, and EntityInHierarchyCleanup</param>
+        public static void SetWorldTransform(EntityInHierarchyHandle handle, in TransformQvvs newWorldTransform, ref ComponentBroker componentBroker)
+        {
+            if (handle.isCopyParent)
+                return;
+            ref var                      lookup     = ref ComponentBrokerAccess.From(ref componentBroker);
+            Span<TransformQvvs>          transforms = stackalloc TransformQvvs[] { newWorldTransform };
+            Span<Propagate.WriteCommand> commands   =
+                stackalloc Propagate.WriteCommand[] { new Propagate.WriteCommand {
+                                                          indexInHierarchy = handle.indexInHierarchy,
+                                                          writeType        = Propagate.WriteCommand.WriteType.WorldTransformSet
+                                                      } };
+            Propagate.WriteAndPropagate(handle.m_hierarchy, transforms, commands, ref lookup, ref lookup);
+        }
+
+        /// <summary>
+        /// Sets the WorldTransform for the entity corresponding to the specified hierarchy handle.
+        /// </summary>
+        /// <param name="handle">The hierarchy handle representing the entity whose WorldTransform should be replaced</param>
+        /// <param name="newWorldTransform">The new WorldTransform value</param>
+        /// <param name="key">A key to ensure the hierarchy is safe to access</param>
+        /// <param name="componentBroker">A ComponentBroker with write access to WorldTransform and read access to RootReference, EntityInHierarchy, and EntityInHierarchyCleanup</param>
+        public static void SetWorldTransform(EntityInHierarchyHandle handle, in TransformQvvs newWorldTransform, TransformsKey key, ref ComponentBroker componentBroker)
+        {
+            if (handle.isCopyParent)
+                return;
+            key.Validate(handle.root.entity);
+            ref var                      lookup     = ref ComponentBrokerParallelAccess.From(ref componentBroker);
             Span<TransformQvvs>          transforms = stackalloc TransformQvvs[] { newWorldTransform };
             Span<Propagate.WriteCommand> commands   =
                 stackalloc Propagate.WriteCommand[] { new Propagate.WriteCommand {
@@ -191,6 +269,83 @@ namespace Latios.Transforms
             Span<Propagate.WriteCommand> commands   =
                 stackalloc Propagate.WriteCommand[] { new Propagate.WriteCommand
                                                       {
+                                                          indexInHierarchy = handle.indexInHierarchy,
+                                                          writeType        = Propagate.WriteCommand.WriteType.WorldTransformSet
+                                                      } };
+            Propagate.WriteAndPropagate(handle.m_hierarchy, transforms, commands, ref lookup, ref lookup);
+        }
+
+        /// <summary>
+        /// Sets the TickedWorldTransform of an entity.
+        /// </summary>
+        /// <param name="entity">The entity to set the TickedWorldTransform for</param>
+        /// <param name="newTickedWorldTransform">The new TickedWorldTransform value</param>
+        /// <param name="componentBroker">A ComponentBroker with write access to TickedWorldTransform and read access to RootReference, EntityInHierarchy, and EntityInHierarchyCleanup</param>
+        public static void SetTickedWorldTransform(Entity entity, in TransformQvvs newTickedWorldTransform, ref ComponentBroker componentBroker)
+        {
+            var handle = GetHierarchyHandle(entity, ref componentBroker);
+            if (handle.isNull)
+            {
+                componentBroker.GetRW<TickedWorldTransform>(entity).ValueRW.worldTransform = newTickedWorldTransform;
+                return;
+            }
+            SetTickedWorldTransform(handle, in newTickedWorldTransform, ref componentBroker);
+        }
+
+        /// <summary>
+        /// Sets the TickedWorldTransform of an entity.
+        /// </summary>
+        /// <param name="entity">The entity to set the TickedWorldTransform for</param>
+        /// <param name="newTickedWorldTransform">The new TickedWorldTransform value</param>
+        /// <param name="key">A key to ensure the hierarchy is safe to access</param>
+        /// <param name="componentBroker">A ComponentBroker with write access to TickedWorldTransform and read access to RootReference, EntityInHierarchy, and EntityInHierarchyCleanup</param>
+        public static void SetTickedWorldTransform(Entity entity, in TransformQvvs newTickedWorldTransform, TransformsKey key, ref ComponentBroker componentBroker)
+        {
+            var handle = GetHierarchyHandle(entity, ref componentBroker);
+            if (handle.isNull)
+            {
+                componentBroker.GetRW<TickedWorldTransform>(entity, key).ValueRW.worldTransform = newTickedWorldTransform;
+                return;
+            }
+            SetTickedWorldTransform(handle, in newTickedWorldTransform, ref componentBroker);
+        }
+
+        /// <summary>
+        /// Sets the TickedWorldTransform for the entity corresponding to the specified hierarchy handle.
+        /// </summary>
+        /// <param name="handle">The hierarchy handle representing the entity whose TickedWorldTransform should be replaced</param>
+        /// <param name="newTickedWorldTransform">The new TickedWorldTransform value</param>
+        /// <param name="componentBroker">A ComponentBroker with write access to TickedWorldTransform and read access to RootReference, EntityInHierarchy, and EntityInHierarchyCleanup</param>
+        public static void SetTickedWorldTransform(EntityInHierarchyHandle handle, in TransformQvvs newTickedWorldTransform, ref ComponentBroker componentBroker)
+        {
+            if (handle.isCopyParent)
+                return;
+            ref var                      lookup     = ref TickedComponentBrokerAccess.From(ref componentBroker);
+            Span<TransformQvvs>          transforms = stackalloc TransformQvvs[] { newTickedWorldTransform };
+            Span<Propagate.WriteCommand> commands   =
+                stackalloc Propagate.WriteCommand[] { new Propagate.WriteCommand {
+                                                          indexInHierarchy = handle.indexInHierarchy,
+                                                          writeType        = Propagate.WriteCommand.WriteType.WorldTransformSet
+                                                      } };
+            Propagate.WriteAndPropagate(handle.m_hierarchy, transforms, commands, ref lookup, ref lookup);
+        }
+
+        /// <summary>
+        /// Sets the TickedWorldTransform for the entity corresponding to the specified hierarchy handle.
+        /// </summary>
+        /// <param name="handle">The hierarchy handle representing the entity whose TickedWorldTransform should be replaced</param>
+        /// <param name="newTickedWorldTransform">The new TickedWorldTransform value</param>
+        /// <param name="key">A key to ensure the hierarchy is safe to access</param>
+        /// <param name="componentBroker">A ComponentBroker with write access to TickedWorldTransform and read access to RootReference, EntityInHierarchy, and EntityInHierarchyCleanup</param>
+        public static void SetTickedWorldTransform(EntityInHierarchyHandle handle, in TransformQvvs newTickedWorldTransform, TransformsKey key, ref ComponentBroker componentBroker)
+        {
+            if (handle.isCopyParent)
+                return;
+            key.Validate(handle.root.entity);
+            ref var                      lookup     = ref TickedComponentBrokerParallelAccess.From(ref componentBroker);
+            Span<TransformQvvs>          transforms = stackalloc TransformQvvs[] { newTickedWorldTransform };
+            Span<Propagate.WriteCommand> commands   =
+                stackalloc Propagate.WriteCommand[] { new Propagate.WriteCommand {
                                                           indexInHierarchy = handle.indexInHierarchy,
                                                           writeType        = Propagate.WriteCommand.WriteType.WorldTransformSet
                                                       } };

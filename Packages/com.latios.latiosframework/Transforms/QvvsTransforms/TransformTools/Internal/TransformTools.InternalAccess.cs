@@ -219,7 +219,153 @@ namespace Latios.Transforms
         #endregion
 
         #region ComponentBroker
-        // Todo:
+        internal struct ComponentBrokerAccess : IAlive, IHierarchy, IWorldTransform
+        {
+            ComponentBroker broker;
+            public static ref ComponentBrokerAccess From(ref ComponentBroker componentBroker) => ref UnsafeUtility.As<ComponentBroker, ComponentBrokerAccess>(ref componentBroker);
+
+            public bool IsAlive(Entity entity) => broker.entityStorageInfoLookup.IsAlive(entity);
+
+            public bool TryGetRootReference(Entity entity, out RootReference rootRef)
+            {
+                var ro = broker.GetRO<RootReference>(entity);
+                if (ro.IsValid)
+                {
+                    rootRef = ro.ValueRO;
+                    return true;
+                }
+                rootRef = default;
+                return false;
+            }
+            public bool TryGetEntityInHierarchy(Entity entity, out DynamicBuffer<EntityInHierarchy> hierarchy)
+            {
+                hierarchy = broker.GetBuffer<EntityInHierarchy>(entity);
+                return hierarchy.IsCreated;
+            }
+            public bool TryGetEntityInHierarchyCleanup(Entity entity, out DynamicBuffer<EntityInHierarchyCleanup> hierarchy)
+            {
+                hierarchy = broker.GetBuffer<EntityInHierarchyCleanup>(entity);
+                return hierarchy.IsCreated;
+            }
+
+            public WorldTransform GetWorldTransform(Entity entity) => broker.GetRO<WorldTransform>(entity).ValueRO;
+            public RefRW<WorldTransform> GetWorldTransformRefRW(Entity entity) => broker.GetRW<WorldTransform>(entity);
+            public bool HasWorldTransform(Entity entity) => broker.Has<WorldTransform>(entity);
+        }
+
+        internal struct ComponentBrokerParallelAccess : IAlive, IHierarchy, IWorldTransform
+        {
+            ComponentBroker broker;
+            public static ref ComponentBrokerParallelAccess From(ref ComponentBroker componentBroker) => ref UnsafeUtility.As<ComponentBroker, ComponentBrokerParallelAccess>(
+                ref componentBroker);
+
+            public bool IsAlive(Entity entity) => broker.entityStorageInfoLookup.IsAlive(entity);
+
+            public bool TryGetRootReference(Entity entity, out RootReference rootRef)
+            {
+                var ro = broker.GetROIgnoreParallelSafety<RootReference>(entity);
+                if (ro.IsValid)
+                {
+                    rootRef = ro.ValueRO;
+                    return true;
+                }
+                rootRef = default;
+                return false;
+            }
+            public bool TryGetEntityInHierarchy(Entity entity, out DynamicBuffer<EntityInHierarchy> hierarchy)
+            {
+                hierarchy = broker.GetBufferIgnoreParallelSafety<EntityInHierarchy>(entity);
+                return hierarchy.IsCreated;
+            }
+            public bool TryGetEntityInHierarchyCleanup(Entity entity, out DynamicBuffer<EntityInHierarchyCleanup> hierarchy)
+            {
+                hierarchy = broker.GetBufferIgnoreParallelSafety<EntityInHierarchyCleanup>(entity);
+                return hierarchy.IsCreated;
+            }
+
+            public WorldTransform GetWorldTransform(Entity entity) => broker.GetROIgnoreParallelSafety<WorldTransform>(entity).ValueRO;
+            public RefRW<WorldTransform> GetWorldTransformRefRW(Entity entity) => broker.GetRWIgnoreParallelSafety<WorldTransform>(entity);
+            public bool HasWorldTransform(Entity entity) => broker.Has<WorldTransform>(entity);
+        }
+
+        internal struct TickedComponentBrokerAccess : IAlive, IHierarchy, IWorldTransform
+        {
+            ComponentBroker broker;
+            public static ref TickedComponentBrokerAccess From(ref ComponentBroker componentBroker) => ref UnsafeUtility.As<ComponentBroker, TickedComponentBrokerAccess>(
+                ref componentBroker);
+
+            public bool IsAlive(Entity entity) => broker.entityStorageInfoLookup.IsAlive(entity);
+
+            public bool TryGetRootReference(Entity entity, out RootReference rootRef)
+            {
+                var ro = broker.GetRO<RootReference>(entity);
+                if (ro.IsValid)
+                {
+                    rootRef = ro.ValueRO;
+                    return true;
+                }
+                rootRef = default;
+                return false;
+            }
+            public bool TryGetEntityInHierarchy(Entity entity, out DynamicBuffer<EntityInHierarchy> hierarchy)
+            {
+                hierarchy = broker.GetBuffer<EntityInHierarchy>(entity);
+                return hierarchy.IsCreated;
+            }
+            public bool TryGetEntityInHierarchyCleanup(Entity entity, out DynamicBuffer<EntityInHierarchyCleanup> hierarchy)
+            {
+                hierarchy = broker.GetBuffer<EntityInHierarchyCleanup>(entity);
+                return hierarchy.IsCreated;
+            }
+
+            public WorldTransform GetWorldTransform(Entity entity) => broker.GetRO<TickedWorldTransform>(entity).ValueRO.ToUnticked();
+            public RefRW<WorldTransform> GetWorldTransformRefRW(Entity entity)
+            {
+                var result = broker.GetRW<TickedWorldTransform>(entity);
+                return UnsafeUtility.As<RefRW<TickedWorldTransform>, RefRW<WorldTransform> >(ref result);
+            }
+            public bool HasWorldTransform(Entity entity) => broker.Has<TickedWorldTransform>(entity);
+        }
+
+        internal struct TickedComponentBrokerParallelAccess : IAlive, IHierarchy, IWorldTransform
+        {
+            ComponentBroker broker;
+            public static ref TickedComponentBrokerParallelAccess From(ref ComponentBroker componentBroker) => ref UnsafeUtility.As<ComponentBroker,
+                                                                                                                                    TickedComponentBrokerParallelAccess>(
+                ref componentBroker);
+
+            public bool IsAlive(Entity entity) => broker.entityStorageInfoLookup.IsAlive(entity);
+
+            public bool TryGetRootReference(Entity entity, out RootReference rootRef)
+            {
+                var ro = broker.GetROIgnoreParallelSafety<RootReference>(entity);
+                if (ro.IsValid)
+                {
+                    rootRef = ro.ValueRO;
+                    return true;
+                }
+                rootRef = default;
+                return false;
+            }
+            public bool TryGetEntityInHierarchy(Entity entity, out DynamicBuffer<EntityInHierarchy> hierarchy)
+            {
+                hierarchy = broker.GetBufferIgnoreParallelSafety<EntityInHierarchy>(entity);
+                return hierarchy.IsCreated;
+            }
+            public bool TryGetEntityInHierarchyCleanup(Entity entity, out DynamicBuffer<EntityInHierarchyCleanup> hierarchy)
+            {
+                hierarchy = broker.GetBufferIgnoreParallelSafety<EntityInHierarchyCleanup>(entity);
+                return hierarchy.IsCreated;
+            }
+
+            public WorldTransform GetWorldTransform(Entity entity) => broker.GetROIgnoreParallelSafety<TickedWorldTransform>(entity).ValueRO.ToUnticked();
+            public RefRW<WorldTransform> GetWorldTransformRefRW(Entity entity)
+            {
+                var result = broker.GetRWIgnoreParallelSafety<TickedWorldTransform>(entity);
+                return UnsafeUtility.As<RefRW<TickedWorldTransform>, RefRW<WorldTransform> >(ref result);
+            }
+            public bool HasWorldTransform(Entity entity) => broker.Has<TickedWorldTransform>(entity);
+        }
         #endregion
 
         #region Casts

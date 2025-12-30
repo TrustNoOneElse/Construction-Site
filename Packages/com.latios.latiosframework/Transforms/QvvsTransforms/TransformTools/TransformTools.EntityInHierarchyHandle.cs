@@ -228,6 +228,17 @@ namespace Latios.Transforms
         /// <summary>
         /// Resolves the EntityInHierarchyHandle for the specified RootReference, allowing for fast hierarchy traversal.
         /// </summary>
+        /// <param name="componentBroker">A ComponentBroker with read access to EntityInHierarchy and EntityInHierarchyCleanup</param>
+        /// <returns>An EntityInHierarchyHandle referring to the spot in the hierarchy that the entity this RootReference
+        /// belongs to is located</returns>
+        public static EntityInHierarchyHandle ToHandle(this RootReference rootRef, ref ComponentBroker componentBroker)
+        {
+            return rootRef.ToHandle(ref ComponentBrokerAccess.From(ref componentBroker));
+        }
+
+        /// <summary>
+        /// Resolves the EntityInHierarchyHandle for the specified RootReference, allowing for fast hierarchy traversal.
+        /// </summary>
         /// <param name="entityInHierarchyLookupRO">A readonly BufferLookup to the EntityInHierarchy dynamic buffer</param>
         /// <param name="entityInHierarchyCleanupLookupRO">A readonly BufferLookup to the EntityInHierarchyCleanup dynamic buffer</param>
         /// <returns>An EntityInHierarchyHandle referring to the spot in the hierarchy that the entity this RootReference
@@ -292,6 +303,22 @@ namespace Latios.Transforms
                 return entityManager.GetBuffer<EntityInHierarchy>(entity).GetRootHandle();
             if (entityManager.HasBuffer<EntityInHierarchyCleanup>(entity))
                 return entityManager.GetBuffer<EntityInHierarchyCleanup>(entity).GetRootHandle();
+            return default;
+        }
+
+        internal static EntityInHierarchyHandle GetHierarchyHandle(Entity entity, ref ComponentBroker broker)
+        {
+            var rootRefRO = broker.GetRO<RootReference>(entity);
+            if (rootRefRO.IsValid)
+            {
+                return rootRefRO.ValueRO.ToHandle(ref broker);
+            }
+            var buffer = broker.GetBuffer<EntityInHierarchy>(entity);
+            if (buffer.IsCreated)
+                return buffer.GetRootHandle();
+            var cleanup = broker.GetBuffer<EntityInHierarchyCleanup>(entity);
+            if (cleanup.IsCreated)
+                return cleanup.GetRootHandle();
             return default;
         }
 
