@@ -100,7 +100,7 @@ namespace Latios.Transforms
         /// </summary>
         /// <param name="handle">The hierarchy handle of the entity to read or write</param>
         /// <param name="key">A key that validates the entity is safe to access</param>
-        public T this[TransformTools.EntityInHierarchyHandle handle, TransformsKey key]
+        public T this[EntityInHierarchyHandle handle, TransformsKey key]
         {
             get
             {
@@ -134,7 +134,7 @@ namespace Latios.Transforms
         /// <param name="handle">The hierarchy handle of the entity to read or write</param>
         /// <param name="key">A key that validates the entity is safe to access</param>
         /// <returns>A RefRW that provides direct access to component storage.</returns>
-        public RefRW<T> GetRW(TransformTools.EntityInHierarchyHandle handle, TransformsKey key)
+        public RefRW<T> GetRW(EntityInHierarchyHandle handle, TransformsKey key)
         {
             key.Validate(handle.root.entity);
             return lookup.GetRefRW(handle.entity);
@@ -164,7 +164,7 @@ namespace Latios.Transforms
         /// <param name="key">A key that validates the entity is safe to access</param>
         /// <param name="componentData">The fetched component</param>
         /// <returns>True if the entity had the component</returns>
-        public bool TryGetComponent(TransformTools.EntityInHierarchyHandle handle, TransformsKey key, out T componentData)
+        public bool TryGetComponent(EntityInHierarchyHandle handle, TransformsKey key, out T componentData)
         {
             key.Validate(handle.root.entity);
             return lookup.TryGetComponent(handle.entity, out componentData);
@@ -182,7 +182,7 @@ namespace Latios.Transforms
         /// This check is always valid regardless of whether such a component would be
         /// safe to access.
         /// </summary>
-        public bool HasComponent(TransformTools.EntityInHierarchyHandle handle) => lookup.HasComponent(handle.entity);
+        public bool HasComponent(EntityInHierarchyHandle handle) => lookup.HasComponent(handle.entity);
 
         /// <summary>
         /// This is identical to ComponentDataFromEntity<typeparamref name="T"/>.DidChange().
@@ -194,7 +194,7 @@ namespace Latios.Transforms
         /// This is identical to ComponentDataFromEntity<typeparamref name="T"/>.DidChange().
         /// Note that neither method is deterministic and both can be prone to race conditions.
         /// </summary>
-        public bool DidChange(TransformTools.EntityInHierarchyHandle handle, uint version) => lookup.DidChange(handle.entity, version);
+        public bool DidChange(EntityInHierarchyHandle handle, uint version) => lookup.DidChange(handle.entity, version);
 
         /// <summary>
         /// Fetches the enabled bit of the component on the entity handle secured with the key.
@@ -218,7 +218,7 @@ namespace Latios.Transforms
         /// <param name="handle">The hierarchy handle of the entity to read or write</param>
         /// <param name="key">A key that validates the entity is safe to access</param>
         /// <returns>The enabled state as a boolean</returns>
-        public bool IsEnabled(TransformTools.EntityInHierarchyHandle handle, TransformsKey key)
+        public bool IsEnabled(EntityInHierarchyHandle handle, TransformsKey key)
         {
             key.Validate(handle.root.entity);
             return lookup.IsComponentEnabled(handle.entity);
@@ -248,7 +248,7 @@ namespace Latios.Transforms
         /// <param name="key">A key that validates the entity is safe to access</param>
         /// <param name="enabled">The new enabled state of the component</param>
         /// <remarks>This method performs an atomic operation which may suffer from worse performance than setting a normal bool field.</remarks>
-        public void SetEnabled(TransformTools.EntityInHierarchyHandle handle, TransformsKey key, bool enabled)
+        public void SetEnabled(EntityInHierarchyHandle handle, TransformsKey key, bool enabled)
         {
             key.Validate(handle.root.entity);
             lookup.SetComponentEnabled(handle.entity, enabled);
@@ -306,7 +306,7 @@ namespace Latios.Transforms
         /// </summary>
         /// <param name="handle">The hierarchy handle of the entity to read or write</param>
         /// <param name="key">A key that validates the entity is safe to access</param>
-        public DynamicBuffer<T> this[TransformTools.EntityInHierarchyHandle handle, TransformsKey key]
+        public DynamicBuffer<T> this[EntityInHierarchyHandle handle, TransformsKey key]
         {
             get
             {
@@ -339,7 +339,7 @@ namespace Latios.Transforms
         /// <param name="key">A key that validates the entity is safe to access</param>
         /// <param name="bufferData">The fetched buffer</param>
         /// <returns>True if the entity had the buffer type</returns>
-        public bool TryGetComponent(TransformTools.EntityInHierarchyHandle handle, TransformsKey key, out DynamicBuffer<T> bufferData)
+        public bool TryGetComponent(EntityInHierarchyHandle handle, TransformsKey key, out DynamicBuffer<T> bufferData)
         {
             key.Validate(handle.root.entity);
             return lookup.TryGetBuffer(handle.entity, out bufferData);
@@ -357,7 +357,7 @@ namespace Latios.Transforms
         /// This check is always valid regardless of whether such a buffer would be
         /// safe to access.
         /// </summary>
-        public bool HasBuffer(TransformTools.EntityInHierarchyHandle handle) => lookup.HasBuffer(handle.entity);
+        public bool HasBuffer(EntityInHierarchyHandle handle) => lookup.HasBuffer(handle.entity);
 
         /// <summary>
         /// This is identical to BufferFromEntity<typeparamref name="T"/>.DidChange().
@@ -369,7 +369,7 @@ namespace Latios.Transforms
         /// This is identical to BufferFromEntity<typeparamref name="T"/>.DidChange().
         /// Note that neither method is deterministic and both can be prone to race conditions.
         /// </summary>
-        public bool DidChange(TransformTools.EntityInHierarchyHandle handle, uint version) => lookup.DidChange(handle.entity, version);
+        public bool DidChange(EntityInHierarchyHandle handle, uint version) => lookup.DidChange(handle.entity, version);
 
         /// <summary>
         /// Fetches the enabled bit of the buffer on the solo or root entity secured with the key.
@@ -393,7 +393,7 @@ namespace Latios.Transforms
         /// <param name="handle">The hierarchy handle of the entity to read or write</param>
         /// <param name="key">A key that validates the entity is safe to access</param>
         /// <returns>The enabled state as a boolean</returns>
-        public bool IsEnabled(TransformTools.EntityInHierarchyHandle handle, TransformsKey key)
+        public bool IsEnabled(EntityInHierarchyHandle handle, TransformsKey key)
         {
             key.Validate(handle.root.entity);
             return lookup.IsBufferEnabled(handle.entity);
@@ -423,7 +423,7 @@ namespace Latios.Transforms
         /// <param name="key">A key that validates the entity is safe to access</param>
         /// <param name="enabled">The new enabled state of the buffer</param>
         /// <remarks>This method performs an atomic operation which may suffer from worse performance than setting a normal bool field.</remarks>
-        public void SetEnabled(TransformTools.EntityInHierarchyHandle handle, TransformsKey key, bool enabled)
+        public void SetEnabled(EntityInHierarchyHandle handle, TransformsKey key, bool enabled)
         {
             key.Validate(handle.root.entity);
             lookup.SetBufferEnabled(handle.entity, enabled);
@@ -489,7 +489,7 @@ namespace Latios.Transforms
         /// <param name="handle">The hierarchy handle of the entity to read or write</param>
         /// <param name="key">A key that validates the entity is safe to access</param>
         /// <returns>A RefRO instance which may or may not be valid (use IsValid to check)</returns>
-        public static RefRO<T> GetRO<T>(ref this ComponentBroker broker, TransformTools.EntityInHierarchyHandle handle, TransformsKey key) where T : unmanaged, IComponentData
+        public static RefRO<T> GetRO<T>(ref this ComponentBroker broker, EntityInHierarchyHandle handle, TransformsKey key) where T : unmanaged, IComponentData
         {
             if (broker.IsReadOnlyAccessType<T>())
                 return broker.GetRO<T>(handle.entity);
@@ -519,7 +519,7 @@ namespace Latios.Transforms
         /// <param name="handle">The hierarchy handle of the entity to read or write</param>
         /// <param name="key">A key that validates the entity is safe to access</param>
         /// <returns>A RefRW instance which may or may not be valid (use IsValid to check)</returns>
-        public static RefRW<T> GetRW<T>(ref this ComponentBroker broker, TransformTools.EntityInHierarchyHandle handle, TransformsKey key) where T : unmanaged, IComponentData
+        public static RefRW<T> GetRW<T>(ref this ComponentBroker broker, EntityInHierarchyHandle handle, TransformsKey key) where T : unmanaged, IComponentData
         {
             key.Validate(handle.root.entity);
             return broker.GetRWIgnoreParallelSafety<T>(handle.entity);
@@ -549,7 +549,7 @@ namespace Latios.Transforms
         /// <param name="handle">The hierarchy handle of the entity to read or write</param>
         /// <param name="key">A key that validates the entity is safe to access</param>
         /// <returns>A DynamicBuffer instance which may or may not be valid (use IsCreated to check)</returns>
-        public static DynamicBuffer<T> GetBuffer<T>(ref this ComponentBroker broker, TransformTools.EntityInHierarchyHandle handle, TransformsKey key) where T : unmanaged,
+        public static DynamicBuffer<T> GetBuffer<T>(ref this ComponentBroker broker, EntityInHierarchyHandle handle, TransformsKey key) where T : unmanaged,
         IBufferElementData
         {
             if (broker.IsReadOnlyAccessType<T>())
